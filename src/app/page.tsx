@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Topbar } from '@/components/sharepoint/Topbar';
 import { Sidebar, ActiveNavTab } from '@/components/sharepoint/Sidebar';
 import { Breadcrumb } from '@/components/sharepoint/Breadcrumb';
@@ -11,15 +11,21 @@ import { VersionHistoryModal } from '@/components/sharepoint/VersionHistoryModal
 import { MetadataFilterDrawer } from '@/components/sharepoint/MetadataFilterDrawer';
 import { NewClientModal } from '@/components/sharepoint/NewClientModal';
 import { UploadFileModal } from '@/components/sharepoint/UploadFileModal';
+import { FloatingActionBar } from '@/components/sharepoint/FloatingActionBar';
+import { FilePreviewModal } from '@/components/sharepoint/FilePreviewModal';
+import { DetailsPane } from '@/components/sharepoint/DetailsPane';
+import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
+import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
 import {
   UserProfile,
   ClientFolder,
   FolderItem,
   DocumentFile,
-  FileVersion,
   MetadataFilterState,
+  AuditLog,
 } from '@/types/sharepoint';
-import { Lock, Sparkles, Folder, FileText, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Lock, Activity, Info, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { sharepointService } from '@/services/sharepointService';
 
 export default function SharePointHubPage() {
   // Current user state (RBAC role simulation)
@@ -49,13 +55,28 @@ export default function SharePointHubPage() {
     selectedTags: [],
   });
 
-  // Modal visibility states
+  // Checkbox Selection State for Bulk Actions
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+
+  // Modals, Drawers & Panes visibility states
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
+  const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
+  const [detailsItem, setDetailsItem] = useState<{
+    client?: ClientFolder;
+    subFolder?: FolderItem;
+    file?: DocumentFile;
+  }>({});
 
-  // MOCK DATA STORAGE
+  // Drag and Drop Zone State
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // MOCK CLIENTS DATA
   const [clients, setClients] = useState<ClientFolder[]>([
     {
       id: 'cli-1',
@@ -138,7 +159,7 @@ export default function SharePointHubPage() {
     },
   ];
 
-  // Mock Files Data
+  // MOCK FILES DATA
   const [files, setFiles] = useState<DocumentFile[]>([
     {
       id: 'file-1',
@@ -199,14 +220,72 @@ export default function SharePointHubPage() {
     },
   ]);
 
-  // Handle Client creation with 4 subfolders
+  // AUDIT LOGS STATE
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
+    {
+      id: 'log-1',
+      client_name: '[KH001] - Tập đoàn SunGroup',
+      file_name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
+      action_type: 'UPLOAD_FILE',
+      action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm tài chính 2025',
+      performed_by: 'usr-1',
+      performed_by_name: 'Nguyễn Văn Nam',
+      performed_by_role: 'admin',
+      created_at: '2026-08-12T10:30:00Z',
+    },
+    {
+      id: 'log-2',
+      client_name: '[KH003] - Tập đoàn Hòa Phát',
+      action_type: 'ARCHIVE_CLIENT',
+      action_details: 'Đã đóng dự án và chuyển hồ sơ khách hàng sang chế độ Read-Only Archive',
+      performed_by: 'usr-1',
+      performed_by_name: 'Trần Thị Mai',
+      performed_by_role: 'manager',
+      created_at: '2026-08-11T14:15:00Z',
+    },
+    {
+      id: 'log-3',
+      client_name: '[KH002] - Tập đoàn Vingroup',
+      file_name: 'Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
+      action_type: 'DOWNLOAD_FILE',
+      action_details: 'Đã tải tài liệu báo cáo dự án tư vấn về máy tính',
+      performed_by: 'usr-1',
+      performed_by_name: 'Phạm Thanh Sơn',
+      performed_by_role: 'staff',
+      created_at: '2026-08-10T16:40:00Z',
+    },
+  ]);
+
+  // Log an Audit Event
+  const pushAuditLog = (
+    actionType: AuditLog['action_type'],
+    details: string,
+    fileName?: string,
+    clientName?: string
+  ) => {
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      client_name: clientName || selectedClient?.folder_name || 'System',
+      file_name: fileName,
+      action_type: actionType,
+      action_details: details,
+      performed_by: currentUser.id,
+      performed_by_name: currentUser.full_name,
+      performed_by_role: currentUser.role,
+      created_at: new Date().toISOString(),
+    };
+    setAuditLogs([newLog, ...auditLogs]);
+  };
+
+  // Handle Client Creation
   const handleCreateClient = (code: string, name: string) => {
     const newId = `cli-${Date.now()}`;
+    const folder_name = `[${code}] - ${name}`;
     const newClient: ClientFolder = {
       id: newId,
       code,
       name,
-      folder_name: `[${code}] - ${name}`,
+      folder_name,
       status: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -218,9 +297,11 @@ export default function SharePointHubPage() {
     setClients([newClient, ...clients]);
     setSelectedClient(newClient);
     setSelectedSubFolder(null);
+
+    pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
   };
 
-  // Archive / Restore Client functionality
+  // Archive / Restore Client
   const handleArchiveClient = (client: ClientFolder) => {
     setClients(
       clients.map((c) =>
@@ -230,6 +311,7 @@ export default function SharePointHubPage() {
     if (selectedClient?.id === client.id) {
       setSelectedClient({ ...selectedClient, status: 'archived' });
     }
+    pushAuditLog('ARCHIVE_CLIENT', `Khóa hồ sơ Read-Only sang trạng thái Archive`, undefined, client.folder_name);
   };
 
   const handleRestoreClient = (client: ClientFolder) => {
@@ -241,9 +323,10 @@ export default function SharePointHubPage() {
     if (selectedClient?.id === client.id) {
       setSelectedClient({ ...selectedClient, status: 'active' });
     }
+    pushAuditLog('RESTORE_CLIENT', `Khôi phục hồ sơ sang trạng thái Active hoạt động`, undefined, client.folder_name);
   };
 
-  // Upload new file handler
+  // Upload File
   const handleUploadFile = (data: {
     name: string;
     file: File | null;
@@ -254,9 +337,7 @@ export default function SharePointHubPage() {
   }) => {
     if (!selectedClient) return;
 
-    const folderId = selectedSubFolder
-      ? selectedSubFolder.id
-      : `sf-${selectedClient.id}-1`;
+    const folderId = selectedSubFolder ? selectedSubFolder.id : `sf-${selectedClient.id}-1`;
 
     const newFile: DocumentFile = {
       id: `file-${Date.now()}`,
@@ -264,7 +345,7 @@ export default function SharePointHubPage() {
       folder_id: folderId,
       name: data.name,
       current_version: 1,
-      file_size: data.file ? data.file.size : 2500000,
+      file_size: data.file ? data.file.size : 3200000,
       mime_type: data.file ? data.file.type : 'application/pdf',
       storage_path: `${selectedClient.code}/${data.name}`,
       status: data.status,
@@ -279,11 +360,107 @@ export default function SharePointHubPage() {
     };
 
     setFiles([newFile, ...files]);
+    pushAuditLog(
+      'UPLOAD_FILE',
+      `Tải lên file ${data.name} (Năm ${data.fiscalYear}, Dịch vụ ${data.serviceType})`,
+      data.name
+    );
   };
 
-  // Delete file handler
+  // Delete single file
   const handleDeleteFile = (fileId: string) => {
+    const targetFile = files.find((f) => f.id === fileId);
     setFiles(files.filter((f) => f.id !== fileId));
+    if (targetFile) {
+      pushAuditLog('DELETE_FILE', `Đã xóa vĩnh viễn file ${targetFile.name}`, targetFile.name);
+    }
+  };
+
+  // BULK ACTIONS HANDLERS
+  const handleBulkArchive = () => {
+    if (selectedClientIds.length === 0) return;
+    setClients(
+      clients.map((c) =>
+        selectedClientIds.includes(c.id)
+          ? { ...c, status: 'archived', updated_at: new Date().toISOString() }
+          : c
+      )
+    );
+    pushAuditLog('ARCHIVE_CLIENT', `Archive hàng loạt ${selectedClientIds.length} khách hàng đã chọn`);
+    setSelectedClientIds([]);
+  };
+
+  const handleBulkDownloadZip = () => {
+    alert(`Đang nén và tải xuống file ZIP gồm ${selectedFileIds.length || selectedClientIds.length} mục đã chọn!`);
+    pushAuditLog('DOWNLOAD_FILE', `Tải xuống nén ZIP hàng loạt mục đã chọn`);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedFileIds.length > 0) {
+      setFiles(files.filter((f) => !selectedFileIds.includes(f.id)));
+      pushAuditLog('DELETE_FILE', `Xóa hàng loạt ${selectedFileIds.length} file tài liệu`);
+      setSelectedFileIds([]);
+    }
+    if (selectedClientIds.length > 0) {
+      setClients(clients.filter((c) => !selectedClientIds.includes(c.id)));
+      pushAuditLog('DELETE_FILE', `Xóa hàng loạt ${selectedClientIds.length} thư mục khách hàng`);
+      setSelectedClientIds([]);
+    }
+  };
+
+  const handleApplyBulkMetadata = (data: {
+    fiscalYear?: number;
+    serviceType?: DocumentFile['service_type'];
+    status?: DocumentFile['status'];
+    addTags: string[];
+  }) => {
+    setFiles(
+      files.map((f) => {
+        if (selectedFileIds.includes(f.id)) {
+          return {
+            ...f,
+            fiscal_year: data.fiscalYear ?? f.fiscal_year,
+            service_type: data.serviceType ?? f.service_type,
+            status: data.status ?? f.status,
+            tags: Array.from(new Set([...f.tags, ...data.addTags])),
+            updated_at: new Date().toISOString(),
+          };
+        }
+        return f;
+      })
+    );
+    pushAuditLog('UPDATE_METADATA', `Cập nhật Metadata hàng loạt cho ${selectedFileIds.length} file`);
+    setSelectedFileIds([]);
+  };
+
+  // Drag and Drop desktop files into workspace handler
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (selectedClient) {
+        handleUploadFile({
+          name: droppedFile.name,
+          file: droppedFile,
+          fiscalYear: 2025,
+          serviceType: 'Audit',
+          status: 'Approved',
+          tags: ['Kéo thả', 'Dropzone'],
+        });
+      } else {
+        alert('Vui lòng mở một Thư mục Khách hàng trước khi thả File!');
+      }
+    }
   };
 
   // Derived subfolders for selected client
@@ -292,11 +469,10 @@ export default function SharePointHubPage() {
     return createSubfoldersForClient(selectedClient.id);
   }, [selectedClient]);
 
-  // Active / Archived clients count
   const activeClientsList = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
   const archivedClientsList = useMemo(() => clients.filter((c) => c.status === 'archived'), [clients]);
 
-  // Filtered Clients & Files according to active tab, global search, and metadata filter
+  // Filtered List
   const displayedClients = useMemo(() => {
     let list = activeTab === 'archived_clients' ? archivedClientsList : activeClientsList;
     const query = globalSearchQuery.toLowerCase() || filterState.searchQuery.toLowerCase();
@@ -313,7 +489,6 @@ export default function SharePointHubPage() {
 
   const displayedFiles = useMemo(() => {
     let list = files;
-
     if (selectedClient) {
       list = list.filter((f) => f.client_id === selectedClient.id);
     }
@@ -343,14 +518,27 @@ export default function SharePointHubPage() {
     if (filterState.selectedTags.length > 0) {
       list = list.filter((f) => filterState.selectedTags.every((st) => f.tags.includes(st)));
     }
-
     return list;
   }, [files, selectedClient, selectedSubFolder, globalSearchQuery, filterState]);
 
   const isReadOnly = selectedClient?.status === 'archived';
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col font-sans antialiased select-none">
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="min-h-screen bg-slate-900 flex flex-col font-sans antialiased select-none relative"
+    >
+      {/* Drag & Drop Visual Dropzone Overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-50 bg-blue-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white border-4 border-dashed border-blue-400 m-4 rounded-3xl animate-fade-in pointer-events-none">
+          <UploadCloud className="w-20 h-20 text-blue-300 animate-bounce mb-4" />
+          <h2 className="text-2xl font-bold">Thả File vào đây để Upload lên Supabase Storage</h2>
+          <p className="text-sm text-blue-200 mt-1">Tự động khởi tạo phiên bản v1.0 & gán Metadata Fica Holding</p>
+        </div>
+      )}
+
       {/* SharePoint Topbar */}
       <Topbar
         currentUser={currentUser}
@@ -368,6 +556,8 @@ export default function SharePointHubPage() {
             setActiveTab(tab);
             setSelectedClient(null);
             setSelectedSubFolder(null);
+            setSelectedClientIds([]);
+            setSelectedFileIds([]);
           }}
           activeCount={activeClientsList.length}
           archivedCount={archivedClientsList.length}
@@ -376,9 +566,9 @@ export default function SharePointHubPage() {
         />
 
         {/* Right Main Content */}
-        <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between">
+        <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between relative">
           <div>
-            {/* Navigation Breadcrumb */}
+            {/* Breadcrumb Navigation */}
             <Breadcrumb
               currentClient={selectedClient}
               currentSubFolder={selectedSubFolder}
@@ -386,6 +576,8 @@ export default function SharePointHubPage() {
               onNavigateHome={() => {
                 setSelectedClient(null);
                 setSelectedSubFolder(null);
+                setSelectedClientIds([]);
+                setSelectedFileIds([]);
               }}
               onNavigateClient={() => {
                 setSelectedSubFolder(null);
@@ -428,7 +620,7 @@ export default function SharePointHubPage() {
               onRefresh={() => {}}
             />
 
-            {/* Page Title Header */}
+            {/* Page Header */}
             <div className="px-5 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h1 className="text-base font-bold text-slate-900 flex items-center space-x-2">
@@ -440,33 +632,88 @@ export default function SharePointHubPage() {
                       : activeTab === 'archived_clients'
                       ? 'Kho Lưu Trữ Hồ Sơ Khách Hàng (Archived Clients)'
                       : activeTab === 'reports'
-                      ? 'Báo Cáo & Thống Kê Tài Liệu'
+                      ? 'Nhật Ký Hoạt Động & Kiểm Toán (Audit Stream)'
                       : activeTab === 'settings'
                       ? 'Cài Đặt Hệ Thống SharePoint Fica'
                       : 'Danh Sách Khách Hàng (Active Clients)'}
                   </span>
                 </h1>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Cập nhật thời gian thực qua Supabase Realtime Engine | Fica Holding Financial Workspace
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Fica Holding Financial Workspace
                 </p>
               </div>
+
+              {/* Info Button trigger Details Pane */}
+              <button
+                onClick={() => {
+                  setDetailsItem({
+                    client: selectedClient || undefined,
+                    subFolder: selectedSubFolder || undefined,
+                  });
+                  setIsDetailsPaneOpen(!isDetailsPaneOpen);
+                }}
+                className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors flex items-center space-x-1 text-xs font-semibold"
+                title="Thông tin chi tiết (Details Pane)"
+              >
+                <Info className="w-4 h-4 text-blue-600" />
+                <span>Details Info</span>
+              </button>
             </div>
 
-            {/* Content Views: List View vs Grid View */}
-            {viewMode === 'list' ? (
+            {/* MAIN VIEWS & AUDIT STREAM */}
+            {activeTab === 'reports' ? (
+              <AuditLogTab logs={auditLogs} />
+            ) : viewMode === 'list' ? (
               <DocumentListView
                 clients={displayedClients}
                 subFolders={currentSubFolders}
                 files={displayedFiles}
                 currentClient={selectedClient}
                 currentSubFolder={selectedSubFolder}
+                selectedClientIds={selectedClientIds}
+                selectedFileIds={selectedFileIds}
+                onToggleSelectClient={(id) =>
+                  setSelectedClientIds((prev) =>
+                    prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                  )
+                }
+                onToggleSelectFile={(id) =>
+                  setSelectedFileIds((prev) =>
+                    prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                  )
+                }
+                onToggleSelectAll={() => {
+                  if (!selectedClient) {
+                    if (selectedClientIds.length === displayedClients.length) {
+                      setSelectedClientIds([]);
+                    } else {
+                      setSelectedClientIds(displayedClients.map((c) => c.id));
+                    }
+                  } else {
+                    if (selectedFileIds.length === displayedFiles.length) {
+                      setSelectedFileIds([]);
+                    } else {
+                      setSelectedFileIds(displayedFiles.map((f) => f.id));
+                    }
+                  }
+                }}
                 onSelectClient={(c) => {
                   setSelectedClient(c);
                   setSelectedSubFolder(null);
+                  setSelectedClientIds([]);
+                  setSelectedFileIds([]);
                 }}
                 onSelectSubFolder={(sf) => setSelectedSubFolder(sf)}
+                onPreviewFile={(f) => setPreviewFile(f)}
                 onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
-                onDownloadFile={(f) => alert(`Đang tải file: ${f.name}`)}
+                onOpenDetailsPane={(item) => {
+                  setDetailsItem(item);
+                  setIsDetailsPaneOpen(true);
+                }}
+                onDownloadFile={(f) => {
+                  alert(`Đang tải file: ${f.name}`);
+                  pushAuditLog('DOWNLOAD_FILE', `Tải file ${f.name} về máy`, f.name);
+                }}
                 onArchiveClient={handleArchiveClient}
                 onRestoreClient={handleRestoreClient}
                 onDeleteFile={handleDeleteFile}
@@ -479,13 +726,35 @@ export default function SharePointHubPage() {
                 files={displayedFiles}
                 currentClient={selectedClient}
                 currentSubFolder={selectedSubFolder}
+                selectedClientIds={selectedClientIds}
+                selectedFileIds={selectedFileIds}
+                onToggleSelectClient={(id) =>
+                  setSelectedClientIds((prev) =>
+                    prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                  )
+                }
+                onToggleSelectFile={(id) =>
+                  setSelectedFileIds((prev) =>
+                    prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                  )
+                }
                 onSelectClient={(c) => {
                   setSelectedClient(c);
                   setSelectedSubFolder(null);
+                  setSelectedClientIds([]);
+                  setSelectedFileIds([]);
                 }}
                 onSelectSubFolder={(sf) => setSelectedSubFolder(sf)}
+                onPreviewFile={(f) => setPreviewFile(f)}
                 onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
-                onDownloadFile={(f) => alert(`Đang tải file: ${f.name}`)}
+                onOpenDetailsPane={(item) => {
+                  setDetailsItem(item);
+                  setIsDetailsPaneOpen(true);
+                }}
+                onDownloadFile={(f) => {
+                  alert(`Đang tải file: ${f.name}`);
+                  pushAuditLog('DOWNLOAD_FILE', `Tải file ${f.name} về máy`, f.name);
+                }}
                 onArchiveClient={handleArchiveClient}
                 onRestoreClient={handleRestoreClient}
                 isReadOnly={isReadOnly}
@@ -496,17 +765,32 @@ export default function SharePointHubPage() {
           {/* Footer Bar */}
           <footer className="px-4 py-2 bg-white border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between select-none">
             <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Bảo mật Chuẩn Ngân Hàng & Tài Chính Fica Holding</span>
+              <Activity className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase PostgreSQL Storage | RBAC Active
+              Next.js 15 App Router | Supabase Realtime Storage | Bulk Actions Enabled
             </div>
           </footer>
         </main>
       </div>
 
-      {/* Modals & Drawers */}
+      {/* Floating Action Bar for Bulk Operations */}
+      <FloatingActionBar
+        selectedCount={selectedClient ? selectedFileIds.length : selectedClientIds.length}
+        onClearSelection={() => {
+          setSelectedClientIds([]);
+          setSelectedFileIds([]);
+        }}
+        onBulkArchive={handleBulkArchive}
+        onBulkDownloadZip={handleBulkDownloadZip}
+        onBulkDelete={handleBulkDelete}
+        onBulkMetadata={() => setIsBulkMetadataModalOpen(true)}
+        userRole={currentUser.role}
+        isReadOnly={isReadOnly}
+      />
+
+      {/* Modals, Drawers & Slide-over Panes */}
       <NewClientModal
         isOpen={isNewClientModalOpen}
         onClose={() => setIsNewClientModalOpen(false)}
@@ -543,6 +827,31 @@ export default function SharePointHubPage() {
         }
       />
 
+      <FilePreviewModal
+        file={previewFile}
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        onDownload={(f) => alert(`Đang tải file: ${f.name}`)}
+      />
+
+      <DetailsPane
+        isOpen={isDetailsPaneOpen}
+        onClose={() => setIsDetailsPaneOpen(false)}
+        selectedClient={detailsItem.client || selectedClient}
+        selectedSubFolder={detailsItem.subFolder || selectedSubFolder}
+        selectedFile={detailsItem.file || null}
+        userRole={currentUser.role}
+        onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
+        onDownloadFile={(f) => alert(`Đang tải file: ${f.name}`)}
+      />
+
+      <BulkMetadataModal
+        isOpen={isBulkMetadataModalOpen}
+        onClose={() => setIsBulkMetadataModalOpen(false)}
+        selectedCount={selectedFileIds.length}
+        onApplyBulkMetadata={handleApplyBulkMetadata}
+      />
+
       <VersionHistoryModal
         file={selectedFileForVersionHistory}
         isOpen={!!selectedFileForVersionHistory}
@@ -550,6 +859,7 @@ export default function SharePointHubPage() {
         onDownloadVersion={(v) => alert(`Tải xuống phiên bản v${v.version_number}: ${v.file_name}`)}
         onRestoreVersion={(v) => {
           alert(`Đã khôi phục phiên bản v${v.version_number} thành bản chính!`);
+          pushAuditLog('RESTORE_VERSION', `Khôi phục phiên bản v${v.version_number} làm bản chính`, v.file_name);
           setSelectedFileForVersionHistory(null);
         }}
         isReadOnly={isReadOnly}

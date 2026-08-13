@@ -113,17 +113,33 @@ CREATE TABLE IF NOT EXISTS public.file_versions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. SUPABASE STORAGE BUCKET CREATION
+-- 7. CREATE AUDIT LOGS TABLE (Compliance & Audit Trail)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
+  client_name TEXT,
+  file_id UUID REFERENCES public.files(id) ON DELETE SET NULL,
+  file_name TEXT,
+  action_type TEXT NOT NULL,
+  action_details TEXT NOT NULL,
+  performed_by UUID REFERENCES public.profiles(id),
+  performed_by_name TEXT NOT NULL,
+  performed_by_role TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. SUPABASE STORAGE BUCKET CREATION
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('documents', 'documents', true)
 ON CONFLICT (id) DO NOTHING;
 
--- 8. ROW LEVEL SECURITY (RLS) POLICIES
+-- 9. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.file_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Read Policies (All authenticated users can read)
 CREATE POLICY "Allow authenticated read profiles" ON public.profiles FOR SELECT USING (auth.role() = 'authenticated');
@@ -131,10 +147,11 @@ CREATE POLICY "Allow authenticated read clients" ON public.clients FOR SELECT US
 CREATE POLICY "Allow authenticated read folders" ON public.folders FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Allow authenticated read files" ON public.files FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Allow authenticated read file_versions" ON public.file_versions FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated read audit_logs" ON public.audit_logs FOR SELECT USING (auth.role() = 'authenticated');
 
--- Write Policies for Clients
-CREATE POLICY "Allow staff write clients" ON public.clients
-  FOR ALL USING (auth.role() = 'authenticated');
+-- Write Policies
+CREATE POLICY "Allow staff write clients" ON public.clients FOR ALL USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow staff insert audit_logs" ON public.audit_logs FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 -- Read-Only Enforcement Policy for Folders & Files (Locked when Client is Archived)
 CREATE POLICY "Allow folder insert if client is active" ON public.folders
@@ -176,7 +193,8 @@ CREATE POLICY "Allow authenticated upload documents" ON storage.objects
 CREATE POLICY "Allow authenticated read documents" ON storage.objects
   FOR SELECT USING (bucket_id = 'documents' AND auth.role() = 'authenticated');
 
--- 9. ENABLE SUPABASE REALTIME
+-- 10. ENABLE SUPABASE REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.folders;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.files;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.audit_logs;

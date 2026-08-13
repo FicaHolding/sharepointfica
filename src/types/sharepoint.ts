@@ -50,6 +50,7 @@ export interface FileVersion {
   created_at: string;
   created_by: string;
   created_by_name: string;
+  created_by_avatar?: string;
 }
 
 export interface DocumentFile {
@@ -79,4 +80,33 @@ export interface MetadataFilterState {
   serviceType: string; // 'all' | 'Audit' | 'CFO' | 'Consulting'
   status: string; // 'all' | 'Approved' | 'Pending' | 'Draft'
   selectedTags: string[];
+}
+
+export type AuditActionType =
+  | 'UPLOAD_FILE'
+  | 'DOWNLOAD_FILE'
+  | 'ARCHIVE_CLIENT'
+  | 'RESTORE_CLIENT'
+  | 'DELETE_FILE'
+  | 'UPDATE_METADATA'
+  | 'RESTORE_VERSION'
+  | 'CREATE_CLIENT';
+
+export interface AuditLog {
+  id: string;
+  client_id?: string;
+  client_name?: string;
+  file_id?: string;
+  file_name?: string;
+  action_type: AuditActionType;
+  action_details: string;
+  performed_by: string;
+  performed_by_name: string;
+  performed_by_role: UserRole;
+  created_at: string;
+}
+
+export interface SelectedItemsState {
+  clientIds: string[];
+  fileIds: string[];
 }
