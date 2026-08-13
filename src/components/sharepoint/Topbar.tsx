@@ -27,6 +27,7 @@ interface TopbarProps {
   onSearchChange: (query: string) => void;
   onRoleSwitch: (role: UserRole) => void;
   onOpenUserManagement?: () => void;
+  onOpenProfile?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -35,6 +36,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onSearchChange,
   onRoleSwitch,
   onOpenUserManagement,
+  onOpenProfile,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showRoleSubMenu, setShowRoleSubMenu] = useState(false);
@@ -65,6 +67,16 @@ export const Topbar: React.FC<TopbarProps> = ({
       default:
         return 'bg-slate-600 text-white';
     }
+  };
+
+  // Dynamic Initials Helper
+  const getInitials = (name: string) => {
+    if (!name) return 'U';
+    const words = name.trim().split(' ');
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
   };
 
   return (
@@ -149,7 +161,7 @@ export const Topbar: React.FC<TopbarProps> = ({
             className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-md transition-colors border border-slate-800 hover:border-slate-700"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
-              {currentUser.full_name.substring(0, 2).toUpperCase()}
+              {getInitials(currentUser.full_name)}
             </div>
             <div className="text-left hidden lg:block">
               <div className="text-xs font-bold text-slate-100 leading-tight flex items-center space-x-1.5">
@@ -170,7 +182,7 @@ export const Topbar: React.FC<TopbarProps> = ({
               <div className="px-4 py-3 bg-slate-950/60">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow">
-                    {currentUser.full_name.substring(0, 2).toUpperCase()}
+                    {getInitials(currentUser.full_name)}
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-slate-100">{currentUser.full_name}</h4>
@@ -188,7 +200,10 @@ export const Topbar: React.FC<TopbarProps> = ({
               {/* Navigation Actions */}
               <div className="py-1">
                 <button
-                  onClick={() => alert(`Hồ sơ cá nhân: ${currentUser.full_name} (${currentUser.email})`)}
+                  onClick={() => {
+                    if (onOpenProfile) onOpenProfile();
+                    setShowUserDropdown(false);
+                  }}
                   className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
                 >
                   <User className="w-4 h-4 text-blue-400" />

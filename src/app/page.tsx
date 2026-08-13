@@ -18,6 +18,7 @@ import { DetailsPane } from '@/components/sharepoint/DetailsPane';
 import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
 import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
 import { UserManagementModal } from '@/components/sharepoint/UserManagementModal';
+import { UserProfileModal } from '@/components/sharepoint/UserProfileModal';
 import { RenameClientModal } from '@/components/sharepoint/RenameClientModal';
 import { DeleteClientModal } from '@/components/sharepoint/DeleteClientModal';
 import { ContextMenu, ContextMenuPosition } from '@/components/sharepoint/ContextMenu';
@@ -39,7 +40,7 @@ export default function SharePointHubPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Active Logged In User State (Valid UUID)
+  // Active Logged In User State (Valid UUID & Dynamic metadata)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'a1111111-1111-4111-8111-111111111111',
     email: 'fica.holding@gmail.com',
@@ -139,13 +140,14 @@ export default function SharePointHubPage() {
           const userEmail = session.user.email || 'fica.holding@gmail.com';
           const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
           const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
+          const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
 
           setCurrentUser({
             id: session.user.id,
             email: userEmail,
             full_name: metaName,
             role: metaRole,
-            department: 'Fica Holding JSC',
+            department: metaDept,
           });
         }
       } catch {
@@ -207,6 +209,7 @@ export default function SharePointHubPage() {
   const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
   const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [selectedClientForRename, setSelectedClientForRename] = useState<ClientFolder | null>(null);
   const [selectedClientForDelete, setSelectedClientForDelete] = useState<ClientFolder | null>(null);
@@ -745,6 +748,7 @@ export default function SharePointHubPage() {
         onSearchChange={setGlobalSearchQuery}
         onRoleSwitch={(r) => setCurrentUser({ ...currentUser, role: r })}
         onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
+        onOpenProfile={() => setIsUserProfileModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -979,7 +983,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | DB Insert Persistence Active
+              Next.js 15 App Router | Supabase Realtime Storage | Dynamic User Profile Enabled
             </div>
           </footer>
         </main>
@@ -1026,6 +1030,16 @@ export default function SharePointHubPage() {
       />
 
       {/* Modals & Slide-over Panes */}
+      <UserProfileModal
+        currentUser={currentUser}
+        isOpen={isUserProfileModalOpen}
+        onClose={() => setIsUserProfileModalOpen(false)}
+        onUpdateProfile={(updated) => {
+          setCurrentUser((prev) => ({ ...prev, ...updated }));
+          addToast('success', 'Đã cập nhật Hồ sơ cá nhân!');
+        }}
+      />
+
       <RenameClientModal
         client={selectedClientForRename}
         isOpen={!!selectedClientForRename}
