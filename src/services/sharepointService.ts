@@ -9,7 +9,7 @@ const isValidUUID = (id: string): boolean => {
 };
 
 export const sharepointService = {
-  // Fetch profiles from Supabase database
+  // Fetch profiles from Supabase database with Defensive Null Checks
   async fetchProfiles(): Promise<UserProfile[]> {
     try {
       const { data, error } = await supabase
@@ -21,7 +21,17 @@ export const sharepointService = {
         console.warn('Error fetching profiles from Supabase:', error.message);
         return [];
       }
-      return data || [];
+
+      if (!data || !Array.isArray(data)) return [];
+
+      return data.map((p: any) => ({
+        id: p.id,
+        email: p.email || 'user@fica.vn',
+        full_name: p.full_name || p.email?.split('@')[0] || 'Cán Bộ Fica',
+        role: p.role || 'staff',
+        department: p.department || 'Fica Holding',
+        phone: p.phone || undefined,
+      }));
     } catch (err: any) {
       console.warn('Profiles fetch exception:', err.message);
       return [];
@@ -83,7 +93,7 @@ export const sharepointService = {
     }
   },
 
-  // Fetch clients from Supabase database
+  // Fetch clients from Supabase database with Null Safety
   async fetchClients(): Promise<ClientFolder[]> {
     try {
       const { data, error } = await supabase

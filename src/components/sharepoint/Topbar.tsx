@@ -54,7 +54,7 @@ export const Topbar: React.FC<TopbarProps> = ({
     router.push('/login');
   };
 
-  const getRoleBadgeColor = (role: UserRole) => {
+  const getRoleBadgeColor = (role?: UserRole) => {
     switch (role) {
       case 'admin':
         return 'bg-purple-600 text-white';
@@ -69,15 +69,22 @@ export const Topbar: React.FC<TopbarProps> = ({
     }
   };
 
-  // Dynamic Initials Helper
-  const getInitials = (name: string) => {
-    if (!name) return 'U';
-    const words = name.trim().split(' ');
+  // Safe Dynamic Initials Helper
+  const getInitials = (name?: string | null) => {
+    if (!name || typeof name !== 'string') return 'FC';
+    const clean = name.trim();
+    if (!clean) return 'FC';
+    const words = clean.split(' ');
     if (words.length >= 2) {
       return (words[0][0] + words[words.length - 1][0]).toUpperCase();
     }
-    return name.substring(0, 2).toUpperCase();
+    return clean.substring(0, 2).toUpperCase();
   };
+
+  const userName = currentUser?.full_name || currentUser?.email || 'Quản trị viên Fica';
+  const userRole = currentUser?.role || 'admin';
+  const userEmail = currentUser?.email || 'admin@fica.vn';
+  const userDept = currentUser?.department || 'Fica Holding';
 
   return (
     <header className="h-14 bg-[#0F172A] text-white flex items-center justify-between px-4 border-b border-slate-800 select-none z-30 sticky top-0 shadow-md">
@@ -114,7 +121,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           </div>
           <input
             type="text"
-            value={searchQuery}
+            value={searchQuery || ''}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Tìm kiếm nhanh theo Tên KH, Mã KH, Tên file hoặc Thẻ Tag... (Alt+/)"
             className="w-full bg-slate-900/90 text-sm text-slate-100 placeholder-slate-400 pl-10 pr-12 py-1.5 rounded-md border border-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
@@ -142,7 +149,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           <HelpCircle className="w-4 h-4" />
         </button>
 
-        {currentUser.role === 'admin' && onOpenUserManagement && (
+        {userRole === 'admin' && onOpenUserManagement && (
           <button
             onClick={onOpenUserManagement}
             title="Quản lý Người dùng & Phân quyền"
@@ -161,16 +168,16 @@ export const Topbar: React.FC<TopbarProps> = ({
             className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-md transition-colors border border-slate-800 hover:border-slate-700"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
-              {getInitials(currentUser.full_name)}
+              {getInitials(userName)}
             </div>
             <div className="text-left hidden lg:block">
               <div className="text-xs font-bold text-slate-100 leading-tight flex items-center space-x-1.5">
-                <span>{currentUser.full_name}</span>
-                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(currentUser.role)}`}>
-                  {currentUser.role}
+                <span className="truncate max-w-[120px]">{userName}</span>
+                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(userRole)}`}>
+                  {userRole}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">{currentUser.email}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">{userEmail}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
@@ -182,16 +189,16 @@ export const Topbar: React.FC<TopbarProps> = ({
               <div className="px-4 py-3 bg-slate-950/60">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow">
-                    {getInitials(currentUser.full_name)}
+                    {getInitials(userName)}
                   </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-100">{currentUser.full_name}</h4>
-                    <p className="text-xs text-slate-400 font-mono">{currentUser.email}</p>
+                  <div className="overflow-hidden">
+                    <h4 className="font-bold text-sm text-slate-100 truncate">{userName}</h4>
+                    <p className="text-xs text-slate-400 font-mono truncate">{userEmail}</p>
                     <div className="mt-1 flex items-center space-x-1">
-                      <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(currentUser.role)}`}>
-                        {currentUser.role}
+                      <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(userRole)}`}>
+                        {userRole}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-medium">{currentUser.department || 'Fica Holding'}</span>
+                      <span className="text-[10px] text-slate-500 font-medium truncate">{userDept}</span>
                     </div>
                   </div>
                 </div>
@@ -210,7 +217,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                   <span>Hồ sơ cá nhân (My Profile)</span>
                 </button>
 
-                {currentUser.role === 'admin' && onOpenUserManagement && (
+                {userRole === 'admin' && onOpenUserManagement && (
                   <button
                     onClick={() => {
                       onOpenUserManagement();
@@ -245,11 +252,11 @@ export const Topbar: React.FC<TopbarProps> = ({
                           setShowRoleSubMenu(false);
                         }}
                         className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-800 rounded transition-colors uppercase font-mono ${
-                          currentUser.role === r ? 'text-blue-400 font-bold' : 'text-slate-400'
+                          userRole === r ? 'text-blue-400 font-bold' : 'text-slate-400'
                         }`}
                       >
                         <span>{r}</span>
-                        {currentUser.role === r && <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
+                        {userRole === r && <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
                       </button>
                     ))}
                   </div>
