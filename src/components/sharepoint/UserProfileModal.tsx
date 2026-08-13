@@ -20,18 +20,41 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 }) => {
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState('');
-  const [phone, setPhone] = useState('0908 123 456');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const supabase = createClient();
 
+  // DYNAMIC READ ON MODAL OPEN & MOUNT
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && isOpen) {
       setFullName(currentUser.full_name || '');
       setDepartment(currentUser.department || 'Phòng Tư Vấn Tài Chính');
+      setPhone(currentUser.phone ?? '');
       setSuccessMsg('');
       setErrorMsg('');
+
+      // Fetch dynamic profile from Supabase Database on Modal open
+      async function fetchFreshProfile() {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('full_name, department, phone')
+            .eq('id', currentUser.id)
+            .single();
+
+          if (data && !error) {
+            if (data.full_name) setFullName(data.full_name);
+            if (data.department) setDepartment(data.department);
+            if (data.phone !== undefined && data.phone !== null) setPhone(data.phone);
+          }
+        } catch {
+          // Keep current state
+        }
+      }
+
+      fetchFreshProfile();
     }
   }, [currentUser, isOpen]);
 
@@ -57,9 +80,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setSuccessMsg('');
     setErrorMsg('');
 
+    const phoneValue = phone.trim();
+    const fullNameValue = fullName.trim();
+    const deptValue = department.trim();
+
     const updatedData: Partial<UserProfile> = {
-      full_name: fullName.trim(),
-      department: department.trim(),
+      full_name: fullNameValue,
+      department: deptValue,
+      phone: phoneValue,
     };
 
     try {
@@ -67,29 +95,34 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       if (typeof window !== 'undefined') {
         const stored = {
           ...currentUser,
-          full_name: fullName.trim(),
-          department: department.trim(),
-          phone: phone.trim(),
+          full_name: fullNameValue,
+          department: deptValue,
+          phone: phoneValue,
         };
         localStorage.setItem('fica_user_profile', JSON.stringify(stored));
       }
 
       // 2. Update Supabase Auth User Metadata
-      await supabase.auth.updateUser({
+      const { error: authErr } = await supabase.auth.updateUser({
         data: {
-          full_name: fullName.trim(),
-          department: department.trim(),
-          phone: phone.trim(),
+          full_name: fullNameValue,
+          department: deptValue,
+          phone: phoneValue,
         },
       });
 
-      // 3. Upsert into Supabase `profiles` table
+      if (authErr) {
+        console.warn('Supabase Auth update notice:', authErr.message);
+      }
+
+      // 3. Upsert into Supabase `profiles` table with `phone` column
       const { error: dbErr } = await supabase.from('profiles').upsert([
         {
           id: currentUser.id,
           email: currentUser.email,
-          full_name: fullName.trim(),
-          department: department.trim(),
+          full_name: fullNameValue,
+          department: deptValue,
+          phone: phoneValue,
           role: currentUser.role,
           updated_at: new Date().toISOString(),
         },
@@ -101,13 +134,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
       onUpdateProfile(updatedData);
 
-      setSuccessMsg('Cập nhật Hồ sơ cá nhân thành công!');
+      setSuccessMsg('Cập nhật Hồ sơ cá nhân & Số điện thoại thành công!');
       setTimeout(() => {
         setSuccessMsg('');
         onClose();
       }, 1200);
     } catch (err: any) {
-      console.warn('Profile update fallback:', err.message);
+      console.warn('Profile update exception:', err.message);
       onUpdateProfile(updatedData);
       setSuccessMsg('Đã lưu thông tin hồ sơ!');
       setTimeout(() => {
@@ -150,9 +183,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div>
             <h4 className="font-bold text-sm text-slate-900">{fullName || currentUser.full_name}</h4>
             <p className="text-xs text-slate-500 font-mono">{currentUser.email}</p>
-            <span className="inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">
-              Role: {currentUser.role}
-            </span>
+            <div className="mt-1 flex items-center space-x-2">
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">
+                Role: {currentUser.role}
+              </span>
+              {phone && (
+                <span className="text-[10px] font-mono text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded">
+                  📞 {phone}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -234,7 +274,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   value={phone}
                   disabled={loading}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0908 123 456"
+                  placeholder="VD: 0908123456"
                   className="w-full p-2.5 pl-9 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 font-mono disabled:bg-slate-100"
                 />
               </div>
