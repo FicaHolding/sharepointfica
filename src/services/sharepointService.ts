@@ -57,8 +57,9 @@ export const sharepointService = {
   // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE
   async renameClient(clientId: string, newCode: string, newName: string): Promise<{ success: boolean; error?: string }> {
     const folder_name = `[${newCode}] - ${newName}`;
+
+    // If it's mock local client ID (cli-1, cli-2...), try upsert into DB
     try {
-      // 1. Send UPDATE directly to Supabase `clients` table
       const { data, error } = await supabase
         .from('clients')
         .update({
@@ -71,7 +72,31 @@ export const sharepointService = {
         .select();
 
       if (error) {
-        console.error('Supabase Database UPDATE Error:', error.message);
+        console.warn('Supabase Database UPDATE Warning:', error.message);
+
+        // If table doesn't exist in schema cache yet, return specific instruction
+        if (error.message.includes("Could not find the table 'public.clients'")) {
+          return {
+            success: false,
+            error: "Bảng 'public.clients' chưa được khởi tạo trên Supabase. Vui lòng copy đoạn mã SQL bên dưới dán vào Supabase SQL Editor để khởi tạo!",
+          };
+        }
+
+        // Try upserting if mock item
+        if (clientId.startsWith('cli-')) {
+          const { error: insertErr } = await supabase
+            .from('clients')
+            .upsert({
+              code: newCode,
+              name: newName,
+              folder_name: folder_name,
+              status: 'active',
+            });
+          if (!insertErr) {
+            return { success: true };
+          }
+        }
+
         return { success: false, error: error.message };
       }
 
