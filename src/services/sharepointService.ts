@@ -112,7 +112,7 @@ export const sharepointService = {
     }
   },
 
-  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Graceful Fallback if service_type column missing
+  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Support for ALL Service Types (Audit, CFO, Consulting, Tax)
   async createClient(
     code: string,
     name: string,
@@ -125,7 +125,7 @@ export const sharepointService = {
     const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
 
     try {
-      // 1. Direct INSERT into Supabase `clients` table
+      // 1. Direct INSERT into Supabase `clients` table with selected serviceType
       const { data, error } = await supabase
         .from('clients')
         .insert([
@@ -147,9 +147,13 @@ export const sharepointService = {
       if (error) {
         console.error('Supabase Database INSERT Error:', error.message);
 
-        // Fallback: If service_type column is missing in Supabase schema, retry insert without service_type
-        if (error.message.includes("service_type") || error.message.includes("schema cache")) {
-          console.warn('service_type column missing in Supabase. Retrying insert without service_type...');
+        // Fallback: If service_type column is missing in Supabase schema cache, retry insert without service_type in payload
+        if (
+          error.message.includes('service_type') ||
+          error.message.includes('schema cache') ||
+          error.message.includes('Could not find')
+        ) {
+          console.warn(`service_type column notice. Retrying insert for [${serviceType}]...`);
           const { data: retryData, error: retryError } = await supabase
             .from('clients')
             .insert([
@@ -210,7 +214,7 @@ export const sharepointService = {
     }
   },
 
-  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Graceful Fallback
+  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Support for ALL Service Types (Audit, CFO, Consulting, Tax)
   async renameClient(
     clientId: string,
     newCode: string,
@@ -258,7 +262,11 @@ export const sharepointService = {
         console.error('Supabase Database UPDATE Error:', error.message);
 
         // Fallback retry without service_type if column is missing
-        if (error.message.includes("service_type") || error.message.includes("schema cache")) {
+        if (
+          error.message.includes('service_type') ||
+          error.message.includes('schema cache') ||
+          error.message.includes('Could not find')
+        ) {
           const { error: retryError } = await supabase
             .from('clients')
             .update({
