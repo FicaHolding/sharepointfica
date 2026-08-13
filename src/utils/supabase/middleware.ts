@@ -6,6 +6,8 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const demoCookie = request.cookies.get('fica_demo_session');
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -31,14 +33,15 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Allow login page access
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  const isAuthenticated = !!user || demoCookie?.value === 'true';
+
+  if (!isAuthenticated && !request.nextUrl.pathname.startsWith('/login')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  if (isAuthenticated && request.nextUrl.pathname.startsWith('/login')) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
