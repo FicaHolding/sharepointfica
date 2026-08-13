@@ -31,7 +31,7 @@ interface UserManagementModalProps {
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   isOpen,
   onClose,
-  users: fallbackUsers,
+  users: initialUsers,
   onAddUser,
   onDeleteUser,
   currentUserRole,
@@ -48,15 +48,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   // Fetch real users from Supabase `profiles` table
   const refreshUsers = async () => {
     setLoading(true);
+    setErrorMsg('');
     try {
       const profiles = await sharepointService.fetchProfiles();
       if (profiles && profiles.length > 0) {
         setDbUsers(profiles);
+      } else if (initialUsers && initialUsers.length > 0) {
+        setDbUsers(initialUsers);
       } else {
-        setDbUsers(fallbackUsers);
+        setDbUsers([]);
       }
-    } catch {
-      setDbUsers(fallbackUsers);
+    } catch (err: any) {
+      setErrorMsg('Không thể tải danh sách người dùng từ CSDL Supabase');
+      setDbUsers([]);
     } finally {
       setLoading(false);
     }
@@ -78,8 +82,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const displayUsers = dbUsers.length > 0 ? dbUsers : fallbackUsers;
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,7 +177,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         <div className="p-5 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-xs text-slate-600">
-              Tổng số tài khoản trong hệ thống: <strong className="text-blue-700 font-mono">{displayUsers.length}</strong>
+              Tổng số tài khoản trong hệ thống CSDL: <strong className="text-blue-700 font-mono">{dbUsers.length}</strong>
             </div>
 
             {currentUserRole === 'admin' && (
@@ -221,7 +223,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   <label className="block font-bold text-slate-700 mb-1">Họ và Tên (*)</label>
                   <input
                     type="text"
-                    placeholder="Nguyễn Văn A"
+                    placeholder="VD: Trần Văn Bình"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="w-full p-2 rounded border border-slate-300 focus:outline-none focus:border-blue-600"
@@ -288,37 +290,55 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {displayUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3 font-semibold text-slate-900">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                          {u.full_name.substring(0, 2).toUpperCase()}
+                {dbUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-6 text-center text-slate-500 text-xs">
+                      {loading ? (
+                        <div className="flex items-center justify-center space-x-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          <span>Đang tải danh sách từ CSDL Supabase...</span>
                         </div>
+                      ) : (
                         <div>
-                          <span>{u.full_name}</span>
-                          {u.phone && <p className="text-[10px] text-slate-500 font-mono">📞 {u.phone}</p>}
+                          <p className="font-semibold text-slate-700">Chưa có dữ liệu người dùng trong CSDL Supabase `profiles`</p>
+                          <p className="text-[11px] text-slate-400 mt-1">Vui lòng nhấn nút "Thêm người dùng mới" để cấp quyền tài khoản!</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div className="font-mono text-slate-600 text-[11px]">{u.email}</div>
-                      <div className="text-[10px] text-slate-400 font-medium">{u.department || 'Fica Holding'}</div>
-                    </td>
-                    <td className="p-3">{getRoleBadge(u.role)}</td>
-                    <td className="p-3 text-right">
-                      {currentUserRole === 'admin' && (
-                        <button
-                          onClick={() => handleDelete(u.id)}
-                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Gỡ bỏ tài khoản"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       )}
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  dbUsers.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
+                            {u.full_name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <span>{u.full_name}</span>
+                            {u.phone && <p className="text-[10px] text-slate-500 font-mono">📞 {u.phone}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-mono text-slate-600 text-[11px]">{u.email}</div>
+                        <div className="text-[10px] text-slate-400 font-medium">{u.department || 'Fica Holding'}</div>
+                      </td>
+                      <td className="p-3">{getRoleBadge(u.role)}</td>
+                      <td className="p-3 text-right">
+                        {currentUserRole === 'admin' && (
+                          <button
+                            onClick={() => handleDelete(u.id)}
+                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Gỡ bỏ tài khoản"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

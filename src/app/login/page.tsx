@@ -7,13 +7,13 @@ import { FicaLogo } from '@/components/sharepoint/FicaLogo';
 import { Shield, Lock, Mail, ArrowRight, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('fica.holding@gmail.com');
+  const [email, setEmail] = useState('admin@fica.vn');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isRegister, setIsRegister] = useState(false);
-  const [fullName, setFullName] = useState('Nguyễn Văn Nam');
+  const [fullName, setFullName] = useState('Quản trị viên Fica');
   const router = useRouter();
 
   const supabase = createClient();
@@ -152,7 +152,7 @@ export default function LoginPage() {
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="VD: Nguyễn Văn Nam"
+                placeholder="VD: Cán Bộ Fica"
                 className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 rounded-lg p-2.5 focus:outline-none focus:border-blue-500"
                 required
               />
@@ -167,7 +167,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="fica.holding@gmail.com"
+                placeholder="admin@fica.vn"
                 className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 pl-9 pr-3 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                 required
               />
@@ -208,21 +208,21 @@ export default function LoginPage() {
 
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             <button
-              onClick={() => handleQuickDemoLogin('admin@fica.vn', 'Nguyễn Văn Nam (Admin)')}
+              onClick={() => handleQuickDemoLogin('admin@fica.vn', 'Quản trị viên (Admin)')}
               className="px-2 py-2 bg-purple-950/60 border border-purple-800 text-purple-300 rounded text-[11px] font-semibold hover:bg-purple-900 transition-colors text-center"
             >
               Admin Role
             </button>
 
             <button
-              onClick={() => handleQuickDemoLogin('manager@fica.vn', 'Lê Hoàng Anh (Manager)')}
+              onClick={() => handleQuickDemoLogin('manager@fica.vn', 'Trưởng phòng (Manager)')}
               className="px-2 py-2 bg-blue-950/60 border border-blue-800 text-blue-300 rounded text-[11px] font-semibold hover:bg-blue-900 transition-colors text-center"
             >
               Manager Role
             </button>
 
             <button
-              onClick={() => handleQuickDemoLogin('staff@fica.vn', 'Phạm Thanh Sơn (Staff)')}
+              onClick={() => handleQuickDemoLogin('staff@fica.vn', 'Chuyên viên (Staff)')}
               className="px-2 py-2 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded text-[11px] font-semibold hover:bg-emerald-900 transition-colors text-center"
             >
               Staff Role

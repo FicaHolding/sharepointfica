@@ -160,7 +160,7 @@ export const sharepointService = {
         action_type: 'CREATE_CLIENT',
         action_details: `Khởi tạo Khách hàng mới [${code}] - ${name} (Dịch vụ: ${serviceType}) với 4 thư mục con tự động`,
         performed_by: validCreatedBy,
-        performed_by_name: 'Nguyễn Văn Nam',
+        performed_by_name: 'Admin',
         performed_by_role: 'admin',
       });
 

@@ -35,7 +35,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setSuccessMsg('');
       setErrorMsg('');
 
-      // Fetch dynamic profile from Supabase Database on Modal open
+      // Fetch fresh profile from Supabase Database on Modal open
       async function fetchFreshProfile() {
         try {
           const { data, error } = await supabase
@@ -238,7 +238,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 value={fullName}
                 disabled={loading}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="VD: Nguyễn Văn Nam"
+                placeholder="VD: Cán Bộ Fica"
                 className="w-full p-2.5 pl-9 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 font-semibold disabled:bg-slate-100"
                 required
               />

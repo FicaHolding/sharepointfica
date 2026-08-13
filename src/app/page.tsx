@@ -44,8 +44,8 @@ export default function SharePointHubPage() {
   // Active Logged In User State (Dynamic Persistence)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'a1111111-1111-4111-8111-111111111111',
-    email: 'fica.holding@gmail.com',
-    full_name: 'Cán Bộ Fica Holding',
+    email: 'admin@fica.vn',
+    full_name: 'Quản trị viên Fica',
     role: 'admin',
     department: 'Ban Giám Đốc Fica Holding',
   });
@@ -64,7 +64,7 @@ export default function SharePointHubPage() {
     }, 4000);
   };
 
-  // MOCK & SUPABASE CLIENTS DATA (Valid UUIDs & CFO Default Service Type)
+  // CLIENTS DATA (Loaded dynamically from Supabase `clients`)
   const [clients, setClients] = useState<ClientFolder[]>([
     {
       id: 'c1111111-1111-4111-8111-111111111111',
@@ -76,7 +76,7 @@ export default function SharePointHubPage() {
       created_at: '2026-01-15T08:30:00Z',
       updated_at: '2026-08-10T14:20:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Cán Bộ Fica Holding',
+      created_by_name: 'Quản trị viên Fica',
       total_files_count: 4,
       total_size_mb: 24.5,
     },
@@ -90,7 +90,7 @@ export default function SharePointHubPage() {
       created_at: '2026-02-01T09:00:00Z',
       updated_at: '2026-08-12T11:15:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Cán Bộ Fica Holding',
+      created_by_name: 'Quản trị viên Fica',
       total_files_count: 4,
       total_size_mb: 48.2,
     },
@@ -104,7 +104,7 @@ export default function SharePointHubPage() {
       created_at: '2025-05-10T10:00:00Z',
       updated_at: '2026-06-30T16:00:00Z',
       created_by: 'a2222222-2222-4222-8222-222222222222',
-      created_by_name: 'Trần Thị Mai',
+      created_by_name: 'Trưởng phòng Fica',
       total_files_count: 4,
       total_size_mb: 112.0,
     },
@@ -134,7 +134,7 @@ export default function SharePointHubPage() {
           data: { session },
         } = await supabase.auth.getSession();
         if (session && session.user) {
-          const userEmail = session.user.email || 'fica.holding@gmail.com';
+          const userEmail = session.user.email || 'admin@fica.vn';
           const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
           const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
           const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
@@ -173,7 +173,7 @@ export default function SharePointHubPage() {
       // 3. Fetch System Profiles from Supabase
       try {
         const profiles = await sharepointService.fetchProfiles();
-        if (profiles && profiles.length > 0) {
+        if (profiles) {
           setSystemUsers(profiles);
         }
       } catch {
@@ -187,7 +187,7 @@ export default function SharePointHubPage() {
           setClients(dbClients);
         }
       } catch {
-        // Keep initial mock clients fallback
+        // Keep initial clients fallback
       }
     }
 
@@ -200,7 +200,7 @@ export default function SharePointHubPage() {
         setClients(refreshedClients);
       }
       const refreshedProfiles = await sharepointService.fetchProfiles();
-      if (refreshedProfiles && refreshedProfiles.length > 0) {
+      if (refreshedProfiles) {
         setSystemUsers(refreshedProfiles);
       }
     });
@@ -294,7 +294,7 @@ export default function SharePointHubPage() {
     },
   ];
 
-  // MOCK FILES DATA (Valid UUIDs)
+  // FILES DATA (Valid UUIDs)
   const [files, setFiles] = useState<DocumentFile[]>([
     {
       id: 'f1111111-1111-4111-8111-111111111111',
@@ -312,8 +312,8 @@ export default function SharePointHubPage() {
       created_at: '2026-01-20T10:00:00Z',
       updated_at: '2026-08-01T15:30:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Cán Bộ Fica Holding',
-      modified_by_name: 'Lê Hoàng Anh',
+      created_by_name: 'Quản trị viên Fica',
+      modified_by_name: 'Quản trị viên Fica',
     },
     {
       id: 'f2222222-2222-4222-8222-222222222222',
@@ -331,8 +331,8 @@ export default function SharePointHubPage() {
       created_at: '2026-03-12T09:15:00Z',
       updated_at: '2026-03-12T09:15:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Cán Bộ Fica Holding',
-      modified_by_name: 'Cán Bộ Fica Holding',
+      created_by_name: 'Quản trị viên Fica',
+      modified_by_name: 'Quản trị viên Fica',
     },
     {
       id: 'f3333333-3333-4333-8333-333333333333',
@@ -350,8 +350,8 @@ export default function SharePointHubPage() {
       created_at: '2026-06-01T14:00:00Z',
       updated_at: '2026-08-11T16:45:00Z',
       created_by: 'a3333333-3333-4333-8333-333333333333',
-      created_by_name: 'Phạm Thanh Sơn',
-      modified_by_name: 'Cán Bộ Fica Holding',
+      created_by_name: 'Chuyên viên Fica',
+      modified_by_name: 'Quản trị viên Fica',
     },
   ]);
 
@@ -364,7 +364,7 @@ export default function SharePointHubPage() {
       action_type: 'UPLOAD_FILE',
       action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm tài chính 2025',
       performed_by: 'a1111111-1111-4111-8111-111111111111',
-      performed_by_name: 'Cán Bộ Fica Holding',
+      performed_by_name: 'Quản trị viên Fica',
       performed_by_role: 'admin',
       created_at: '2026-08-12T10:30:00Z',
     },
@@ -374,7 +374,7 @@ export default function SharePointHubPage() {
       action_type: 'ARCHIVE_CLIENT',
       action_details: 'Đã đóng dự án và chuyển hồ sơ khách hàng sang chế độ Read-Only Archive',
       performed_by: 'a2222222-2222-4222-8222-222222222222',
-      performed_by_name: 'Trần Thị Mai',
+      performed_by_name: 'Trưởng phòng Fica',
       performed_by_role: 'manager',
       created_at: '2026-08-11T14:15:00Z',
     },
