@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client';
-import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType } from '@/types/sharepoint';
+import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile } from '@/types/sharepoint';
 
 const supabase = createClient();
 
@@ -9,6 +9,80 @@ const isValidUUID = (id: string): boolean => {
 };
 
 export const sharepointService = {
+  // Fetch profiles from Supabase database
+  async fetchProfiles(): Promise<UserProfile[]> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.warn('Error fetching profiles from Supabase:', error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err: any) {
+      console.warn('Profiles fetch exception:', err.message);
+      return [];
+    }
+  },
+
+  // Create Profile in Supabase Database
+  async createProfile(profile: Omit<UserProfile, 'id'>): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
+    const newId = crypto.randomUUID();
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: newId,
+            email: profile.email,
+            full_name: profile.full_name,
+            role: profile.role,
+            department: profile.department || 'Fica Holding',
+            phone: profile.phone || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase Profiles INSERT Error:', error.message);
+        return { success: false, error: error.message };
+      }
+
+      await this.logAudit({
+        action_type: 'CREATE_CLIENT',
+        action_details: `Tạo tài khoản người dùng mới: ${profile.full_name} (${profile.email}) - Role: ${profile.role}`,
+        performed_by: 'a1111111-1111-4111-8111-111111111111',
+        performed_by_name: 'Admin',
+        performed_by_role: 'admin',
+      });
+
+      return { success: true, profile: data };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Lỗi lưu thông tin người dùng vào Supabase' };
+    }
+  },
+
+  // Delete Profile from Supabase Database
+  async deleteProfile(profileId: string): Promise<boolean> {
+    try {
+      if (!isValidUUID(profileId)) return true;
+      const { error } = await supabase.from('profiles').delete().eq('id', profileId);
+      if (error) {
+        console.warn('Delete profile error:', error.message);
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   // Fetch clients from Supabase database
   async fetchClients(): Promise<ClientFolder[]> {
     try {
@@ -352,10 +426,15 @@ export const sharepointService = {
     }
   },
 
-  // Subscribe to Supabase Realtime changes
+  // Subscribe to Supabase Realtime changes including profiles
   subscribeRealtime(onTableChange: () => void) {
     const channel = supabase
       .channel('sharepoint-realtime-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => onTableChange()
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients' },

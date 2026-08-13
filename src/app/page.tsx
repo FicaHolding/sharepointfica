@@ -50,30 +50,8 @@ export default function SharePointHubPage() {
     department: 'Ban Giám Đốc Fica Holding',
   });
 
-  // User Management State (Valid UUIDs)
-  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([
-    {
-      id: 'a1111111-1111-4111-8111-111111111111',
-      email: 'fica.holding@gmail.com',
-      full_name: 'Nguyễn Văn Nam',
-      role: 'admin',
-      department: 'Ban Giám Đốc Fica Holding',
-    },
-    {
-      id: 'a2222222-2222-4222-8222-222222222222',
-      email: 'mai.tt@fica.vn',
-      full_name: 'Trần Thị Mai',
-      role: 'manager',
-      department: 'Phòng Thẩm Định & Kiểm Toán',
-    },
-    {
-      id: 'a3333333-3333-4333-8333-333333333333',
-      email: 'son.pt@fica.vn',
-      full_name: 'Phạm Thanh Sơn',
-      role: 'staff',
-      department: 'Phòng Tư Vấn Tài Chính CFO',
-    },
-  ]);
+  // User Management State (Loaded Dynamically from Supabase `profiles`)
+  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
 
   // Toast Notifications State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -98,7 +76,7 @@ export default function SharePointHubPage() {
       created_at: '2026-01-15T08:30:00Z',
       updated_at: '2026-08-10T14:20:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Nguyễn Văn Nam',
+      created_by_name: 'Cán Bộ Fica Holding',
       total_files_count: 4,
       total_size_mb: 24.5,
     },
@@ -112,7 +90,7 @@ export default function SharePointHubPage() {
       created_at: '2026-02-01T09:00:00Z',
       updated_at: '2026-08-12T11:15:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Nguyễn Văn Nam',
+      created_by_name: 'Cán Bộ Fica Holding',
       total_files_count: 4,
       total_size_mb: 48.2,
     },
@@ -132,7 +110,7 @@ export default function SharePointHubPage() {
     },
   ]);
 
-  // Load Real Supabase Database Clients & User Profile on Mount
+  // Load Real Supabase Database Clients & User Profiles on Mount
   useEffect(() => {
     async function initData() {
       // 1. Check LocalStorage Profile Persistence First
@@ -160,6 +138,7 @@ export default function SharePointHubPage() {
           const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
           const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
           const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
+          const metaPhone = session.user.user_metadata?.phone || '';
 
           // Try fetching from `profiles` table
           const { data: dbProfile } = await supabase
@@ -170,6 +149,7 @@ export default function SharePointHubPage() {
 
           const finalName = dbProfile?.full_name || metaName;
           const finalDept = dbProfile?.department || metaDept;
+          const finalPhone = dbProfile?.phone || metaPhone;
 
           const updatedUser: UserProfile = {
             id: session.user.id,
@@ -177,6 +157,7 @@ export default function SharePointHubPage() {
             full_name: finalName,
             role: metaRole,
             department: finalDept,
+            phone: finalPhone,
           };
 
           setCurrentUser(updatedUser);
@@ -189,7 +170,17 @@ export default function SharePointHubPage() {
         // Keep active session fallback
       }
 
-      // 3. Fetch Clients from Supabase DB
+      // 3. Fetch System Profiles from Supabase
+      try {
+        const profiles = await sharepointService.fetchProfiles();
+        if (profiles && profiles.length > 0) {
+          setSystemUsers(profiles);
+        }
+      } catch {
+        // Keep fallback
+      }
+
+      // 4. Fetch Clients from Supabase DB
       try {
         const dbClients = await sharepointService.fetchClients();
         if (dbClients && dbClients.length > 0) {
@@ -202,11 +193,15 @@ export default function SharePointHubPage() {
 
     initData();
 
-    // 4. Subscribe to Realtime DB updates
+    // 5. Subscribe to Realtime DB updates (clients & profiles)
     const unsubscribe = sharepointService.subscribeRealtime(async () => {
       const refreshedClients = await sharepointService.fetchClients();
       if (refreshedClients && refreshedClients.length > 0) {
         setClients(refreshedClients);
+      }
+      const refreshedProfiles = await sharepointService.fetchProfiles();
+      if (refreshedProfiles && refreshedProfiles.length > 0) {
+        setSystemUsers(refreshedProfiles);
       }
     });
 
@@ -317,7 +312,7 @@ export default function SharePointHubPage() {
       created_at: '2026-01-20T10:00:00Z',
       updated_at: '2026-08-01T15:30:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Nguyễn Văn Nam',
+      created_by_name: 'Cán Bộ Fica Holding',
       modified_by_name: 'Lê Hoàng Anh',
     },
     {
@@ -336,8 +331,8 @@ export default function SharePointHubPage() {
       created_at: '2026-03-12T09:15:00Z',
       updated_at: '2026-03-12T09:15:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Nguyễn Văn Nam',
-      modified_by_name: 'Nguyễn Văn Nam',
+      created_by_name: 'Cán Bộ Fica Holding',
+      modified_by_name: 'Cán Bộ Fica Holding',
     },
     {
       id: 'f3333333-3333-4333-8333-333333333333',
@@ -356,7 +351,7 @@ export default function SharePointHubPage() {
       updated_at: '2026-08-11T16:45:00Z',
       created_by: 'a3333333-3333-4333-8333-333333333333',
       created_by_name: 'Phạm Thanh Sơn',
-      modified_by_name: 'Nguyễn Văn Nam',
+      modified_by_name: 'Cán Bộ Fica Holding',
     },
   ]);
 
@@ -369,7 +364,7 @@ export default function SharePointHubPage() {
       action_type: 'UPLOAD_FILE',
       action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm tài chính 2025',
       performed_by: 'a1111111-1111-4111-8111-111111111111',
-      performed_by_name: 'Nguyễn Văn Nam',
+      performed_by_name: 'Cán Bộ Fica Holding',
       performed_by_role: 'admin',
       created_at: '2026-08-12T10:30:00Z',
     },
@@ -512,20 +507,24 @@ export default function SharePointHubPage() {
     }
   };
 
-  // Add User Handler for User Management
-  const handleAddUser = (newUser: Omit<UserProfile, 'id'>) => {
-    const created: UserProfile = {
-      ...newUser,
-      id: crypto.randomUUID(),
-    };
-    setSystemUsers([...systemUsers, created]);
-    pushAuditLog('CREATE_CLIENT', `Thêm tài khoản người dùng mới ${newUser.full_name} (${newUser.email}) - Role: ${newUser.role}`);
-    addToast('success', 'Tạo tài khoản người dùng mới thành công!', `Email: ${newUser.email}`);
+  // REAL SUPABASE DATABASE PROFILES MANAGEMENT HANDLERS
+  const handleAddUser = async (newUser: Omit<UserProfile, 'id'>) => {
+    const res = await sharepointService.createProfile(newUser);
+    if (res.success && res.profile) {
+      setSystemUsers((prev) => [...prev, res.profile!]);
+      pushAuditLog('CREATE_CLIENT', `Thêm tài khoản người dùng mới ${newUser.full_name} (${newUser.email}) - Role: ${newUser.role}`);
+      addToast('success', 'Tạo tài khoản người dùng mới thành công!', `Email: ${newUser.email}`);
+    } else {
+      addToast('error', 'Lỗi thêm người dùng!', res.error);
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    setSystemUsers(systemUsers.filter((u) => u.id !== userId));
-    addToast('info', 'Đã gỡ bỏ tài khoản người dùng.');
+  const handleDeleteUser = async (userId: string) => {
+    const success = await sharepointService.deleteProfile(userId);
+    if (success) {
+      setSystemUsers((prev) => prev.filter((u) => u.id !== userId));
+      addToast('info', 'Đã gỡ bỏ tài khoản người dùng.');
+    }
   };
 
   // Archive / Restore Client
@@ -1040,7 +1039,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Service Type Filter Active
+              Next.js 15 App Router | Supabase Realtime Storage | RBAC Realtime Sync Active
             </div>
           </footer>
         </main>

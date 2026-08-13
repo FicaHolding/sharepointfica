@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   UserPlus,
@@ -13,53 +13,116 @@ import {
   Building2,
   Trash2,
   Edit,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '@/types/sharepoint';
+import { sharepointService } from '@/services/sharepointService';
 
 interface UserManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   users: UserProfile[];
-  onAddUser: (newUser: Omit<UserProfile, 'id'>) => void;
-  onDeleteUser: (userId: string) => void;
+  onAddUser: (newUser: Omit<UserProfile, 'id'>) => Promise<void> | void;
+  onDeleteUser: (userId: string) => Promise<void> | void;
   currentUserRole: UserRole;
 }
 
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   isOpen,
   onClose,
-  users,
+  users: fallbackUsers,
   onAddUser,
   onDeleteUser,
   currentUserRole,
 }) => {
+  const [dbUsers, setDbUsers] = useState<UserProfile[]>([]);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState('Phòng Tư Vấn Tài Chính');
   const [role, setRole] = useState<UserRole>('staff');
   const [showAddForm, setShowAddForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Fetch real users from Supabase `profiles` table
+  const refreshUsers = async () => {
+    setLoading(true);
+    try {
+      const profiles = await sharepointService.fetchProfiles();
+      if (profiles && profiles.length > 0) {
+        setDbUsers(profiles);
+      } else {
+        setDbUsers(fallbackUsers);
+      }
+    } catch {
+      setDbUsers(fallbackUsers);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      refreshUsers();
+
+      // Subscribe to Realtime changes on `profiles`
+      const unsubscribe = sharepointService.subscribeRealtime(() => {
+        refreshUsers();
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const displayUsers = dbUsers.length > 0 ? dbUsers : fallbackUsers;
+
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !fullName.trim()) {
       setErrorMsg('Vui lòng nhập đầy đủ Email và Họ tên người dùng.');
       return;
     }
 
-    onAddUser({
-      email: email.trim(),
-      full_name: fullName.trim(),
-      role,
-      department: department.trim(),
-    });
-
-    setEmail('');
-    setFullName('');
+    setLoading(true);
     setErrorMsg('');
-    setShowAddForm(false);
+
+    try {
+      await onAddUser({
+        email: email.trim(),
+        full_name: fullName.trim(),
+        role,
+        department: department.trim(),
+      });
+
+      await refreshUsers();
+
+      setEmail('');
+      setFullName('');
+      setShowAddForm(false);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi thêm người dùng!');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (userId: string) => {
+    if (confirm('Bạn có chắc chắn muốn gỡ bỏ tài khoản này khỏi hệ thống RBAC?')) {
+      setLoading(true);
+      try {
+        await onDeleteUser(userId);
+        await refreshUsers();
+      } catch {
+        // Ignore
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   const getRoleBadge = (r: UserRole) => {
@@ -86,30 +149,39 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm">Quản lý Người dùng & Phân quyền RBAC</h3>
-              <p className="text-[11px] text-slate-400">Danh sách tài khoản & Khởi tạo người dùng Fica Holding</p>
+              <p className="text-[11px] text-slate-400">Danh sách tài khoản Supabase `profiles` & Khởi tạo quyền Fica Holding</p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={refreshUsers}
+              title="Làm mới CSDL"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Content Area */}
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
-          {/* Top Bar Action */}
+        {/* Body Content */}
+        <div className="p-5 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800">
-              Tổng số tài khoản: <span className="text-blue-600 font-mono">{users.length}</span>
-            </span>
+            <div className="text-xs text-slate-600">
+              Tổng số tài khoản trong hệ thống: <strong className="text-blue-700 font-mono">{displayUsers.length}</strong>
+            </div>
 
             {currentUserRole === 'admin' && (
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
-                className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1.5 rounded-lg shadow-xs transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-all shadow-xs"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>{showAddForm ? 'Đóng form' : 'Thêm người dùng mới'}</span>
@@ -117,42 +189,42 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             )}
           </div>
 
-          {/* Add New User Form */}
+          {/* Add User Form Drawer */}
           {showAddForm && (
-            <form onSubmit={handleCreateUser} className="p-4 bg-blue-50/60 border border-blue-200 rounded-xl space-y-3 animate-fade-in text-xs">
-              <h4 className="font-bold text-blue-900 flex items-center space-x-1">
-                <UserPlus className="w-4 h-4 text-blue-600" />
-                <span>Khởi tạo / Mời người dùng mới vào hệ thống:</span>
+            <form onSubmit={handleCreateUser} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 animate-fade-in text-xs">
+              <h4 className="font-bold text-slate-900 flex items-center space-x-1.5">
+                <Shield className="w-4 h-4 text-blue-600" />
+                <span>Mời người dùng mới vào hệ thống Supabase RBAC</span>
               </h4>
 
               {errorMsg && (
-                <div className="p-2 bg-red-100 border border-red-300 text-red-700 rounded text-xs flex items-center space-x-1">
-                  <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
                   <span>{errorMsg}</span>
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Email người dùng (*):</label>
+                  <label className="block font-bold text-slate-700 mb-1">Email công ty (*)</label>
                   <input
                     type="email"
-                    placeholder="name@fica.vn"
+                    placeholder="user@fica.vn"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full text-xs p-2 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 font-mono"
+                    className="w-full p-2 rounded border border-slate-300 font-mono focus:outline-none focus:border-blue-600"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Họ và Tên (*):</label>
+                  <label className="block font-bold text-slate-700 mb-1">Họ và Tên (*)</label>
                   <input
                     type="text"
-                    placeholder="VD: Trần Thị Mai"
+                    placeholder="Nguyễn Văn A"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full text-xs p-2 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600"
+                    className="w-full p-2 rounded border border-slate-300 focus:outline-none focus:border-blue-600"
                     required
                   />
                 </div>
@@ -160,86 +232,89 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Phòng ban / Chức danh:</label>
+                  <label className="block font-bold text-slate-700 mb-1">Phòng ban / Đơn vị</label>
                   <input
                     type="text"
-                    placeholder="VD: Phòng Kiểm Toán & Thẩm Định"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full text-xs p-2 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600"
+                    className="w-full p-2 rounded border border-slate-300 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Phân quyền (Role RBAC):</label>
+                  <label className="block font-bold text-slate-700 mb-1">Phân quyền Vai trò (RBAC)</label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as UserRole)}
-                    className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white font-semibold"
+                    className="w-full p-2 rounded border border-slate-300 font-semibold focus:outline-none focus:border-blue-600 bg-white"
                   >
-                    <option value="admin">Admin (Toàn quyền quản trị)</option>
-                    <option value="manager">Manager (Quản lý dự án / Đóng gói)</option>
-                    <option value="staff">Staff (Chuyên viên Upload / Sửa)</option>
-                    <option value="client">Client (Khách hàng Read-Only)</option>
+                    <option value="admin">ADMIN - Quyền Quản trị viên</option>
+                    <option value="manager">MANAGER - Quyền Trưởng phòng</option>
+                    <option value="staff">STAFF - Quyền Chuyên viên</option>
+                    <option value="client">CLIENT - Quyền Xem hồ sơ</option>
                   </select>
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-1 flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded font-semibold"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs"
+                  disabled={loading}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold flex items-center space-x-1.5 disabled:opacity-50"
                 >
-                  Lưu & Cấp quyền
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                  <span>Xác nhận thêm User</span>
                 </button>
               </div>
             </form>
           )}
 
-          {/* User List Table */}
+          {/* User Table List */}
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                  <th className="p-3">Họ và Tên</th>
-                  <th className="p-3">Email Fica</th>
-                  <th className="p-3">Phòng ban</th>
-                  <th className="p-3">Phân quyền</th>
-                  <th className="p-3 text-center">Thao tác</th>
+                <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-700">
+                  <th className="p-3">Họ và Tên Cán Bộ</th>
+                  <th className="p-3">Email & Phòng ban</th>
+                  <th className="p-3">Phân quyền RBAC</th>
+                  <th className="p-3 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.map((u) => (
+              <tbody className="divide-y divide-slate-200">
+                {displayUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3">
-                      <div className="flex items-center space-x-2.5">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                    <td className="p-3 font-semibold text-slate-900">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
                           {u.full_name.substring(0, 2).toUpperCase()}
                         </div>
-                        <span className="font-bold text-slate-900">{u.full_name}</span>
+                        <div>
+                          <span>{u.full_name}</span>
+                          {u.phone && <p className="text-[10px] text-slate-500 font-mono">📞 {u.phone}</p>}
+                        </div>
                       </div>
                     </td>
-                    <td className="p-3 font-mono text-slate-600">{u.email}</td>
-                    <td className="p-3 text-slate-600">{u.department || 'Fica Holding'}</td>
+                    <td className="p-3">
+                      <div className="font-mono text-slate-600 text-[11px]">{u.email}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">{u.department || 'Fica Holding'}</div>
+                    </td>
                     <td className="p-3">{getRoleBadge(u.role)}</td>
-                    <td className="p-3 text-center">
-                      {currentUserRole === 'admin' && u.email !== 'admin@fica.vn' ? (
+                    <td className="p-3 text-right">
+                      {currentUserRole === 'admin' && (
                         <button
-                          onClick={() => onDeleteUser(u.id)}
-                          className="p-1 hover:bg-red-50 text-red-600 rounded transition-colors"
-                          title="Xóa tài khoản"
+                          onClick={() => handleDelete(u.id)}
+                          className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Gỡ bỏ tài khoản"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic">Protected</span>
                       )}
                     </td>
                   </tr>
@@ -250,12 +325,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
+        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <span>Đồng bộ dữ liệu thời gian thực với Supabase Realtime Engine</span>
           <button
             onClick={onClose}
-            className="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold text-xs py-2 rounded-lg transition-colors"
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold transition-colors"
           >
-            Đóng Panel
+            Đóng cửa sổ
           </button>
         </div>
       </div>
