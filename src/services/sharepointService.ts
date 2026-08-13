@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client';
-import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType } from '@/types/sharepoint';
+import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType } from '@/types/sharepoint';
 
 const supabase = createClient();
 
@@ -28,8 +28,13 @@ export const sharepointService = {
     }
   },
 
-  // Create new client folder in Supabase Database with REAL PERSISTENCE & UUID
-  async createClient(code: string, name: string, createdBy: string): Promise<{ success: boolean; client?: ClientFolder; error?: string }> {
+  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Service Type
+  async createClient(
+    code: string,
+    name: string,
+    createdBy: string,
+    serviceType: ServiceType = 'CFO'
+  ): Promise<{ success: boolean; client?: ClientFolder; error?: string }> {
     const folder_name = `[${code}] - ${name}`;
     const newId = crypto.randomUUID();
     const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
@@ -45,6 +50,7 @@ export const sharepointService = {
             name,
             folder_name,
             status: 'active',
+            service_type: serviceType,
             created_by: validCreatedBy,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -78,7 +84,7 @@ export const sharepointService = {
         client_id: data.id,
         client_name: data.folder_name,
         action_type: 'CREATE_CLIENT',
-        action_details: `Khởi tạo Khách hàng mới [${code}] - ${name} với 4 thư mục con tự động`,
+        action_details: `Khởi tạo Khách hàng mới [${code}] - ${name} (Dịch vụ: ${serviceType}) với 4 thư mục con tự động`,
         performed_by: validCreatedBy,
         performed_by_name: 'Nguyễn Văn Nam',
         performed_by_role: 'admin',
@@ -91,21 +97,27 @@ export const sharepointService = {
     }
   },
 
-  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE & UUID VALIDATION
-  async renameClient(clientId: string, newCode: string, newName: string): Promise<{ success: boolean; error?: string }> {
+  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Service Type
+  async renameClient(
+    clientId: string,
+    newCode: string,
+    newName: string,
+    serviceType?: ServiceType
+  ): Promise<{ success: boolean; error?: string }> {
     const folder_name = `[${newCode}] - ${newName}`;
 
     if (!isValidUUID(clientId)) {
       console.warn('Client ID is non-UUID format:', clientId, 'Attempting upsert with valid UUID...');
       try {
-        const { error } = await supabase
-          .from('clients')
-          .upsert({
-            code: newCode,
-            name: newName,
-            folder_name: folder_name,
-            status: 'active',
-          });
+        const updatePayload: any = {
+          code: newCode,
+          name: newName,
+          folder_name: folder_name,
+          status: 'active',
+        };
+        if (serviceType) updatePayload.service_type = serviceType;
+
+        const { error } = await supabase.from('clients').upsert(updatePayload);
         if (error) console.warn('Upsert warning:', error.message);
         return { success: true };
       } catch {
@@ -114,14 +126,17 @@ export const sharepointService = {
     }
 
     try {
+      const updatePayload: any = {
+        code: newCode,
+        name: newName,
+        folder_name: folder_name,
+        updated_at: new Date().toISOString(),
+      };
+      if (serviceType) updatePayload.service_type = serviceType;
+
       const { error } = await supabase
         .from('clients')
-        .update({
-          code: newCode,
-          name: newName,
-          folder_name: folder_name,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', clientId)
         .select();
 
@@ -142,7 +157,7 @@ export const sharepointService = {
         client_id: clientId,
         client_name: folder_name,
         action_type: 'UPDATE_METADATA',
-        action_details: `Đổi tên thư mục thành [${newCode}] - ${newName}`,
+        action_details: `Chỉnh sửa thông tin thư mục [${newCode}] - ${newName}${serviceType ? ` (Dịch vụ: ${serviceType})` : ''}`,
         performed_by: 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: 'Admin',
         performed_by_role: 'admin',

@@ -11,6 +11,8 @@ export interface UserProfile {
 }
 
 export type ClientStatus = 'active' | 'archived';
+export type FileStatus = 'Draft' | 'Pending' | 'Approved' | 'Archived';
+export type ServiceType = 'Audit' | 'CFO' | 'Consulting' | 'Legal' | 'Tax';
 
 export interface ClientFolder {
   id: string;
@@ -18,6 +20,7 @@ export interface ClientFolder {
   name: string;
   folder_name: string; // Format: "[KH001] - Tập đoàn SunGroup"
   status: ClientStatus;
+  service_type?: ServiceType;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -52,9 +55,6 @@ export interface FileVersion {
   created_by_avatar?: string;
 }
 
-export type FileStatus = 'Draft' | 'Pending' | 'Approved' | 'Archived';
-export type ServiceType = 'Audit' | 'CFO' | 'Consulting' | 'Legal' | 'Tax';
-
 export interface DocumentFile {
   id: string;
   folder_id: string;
@@ -79,7 +79,7 @@ export interface DocumentFile {
 export interface MetadataFilterState {
   searchQuery: string;
   fiscalYear: string; // 'all' | '2025' | '2024' | '2023'
-  serviceType: string; // 'all' | 'Audit' | 'CFO' | 'Consulting'
+  serviceType: string; // 'all' | 'Audit' | 'CFO' | 'Consulting' | 'Tax'
   status: string; // 'all' | 'Approved' | 'Pending' | 'Draft'
   selectedTags: string[];
 }

@@ -31,6 +31,7 @@ import {
   MetadataFilterState,
   AuditLog,
   UserRole,
+  ServiceType,
 } from '@/types/sharepoint';
 import { Lock, Activity, Info, UploadCloud, Users, Settings } from 'lucide-react';
 import { sharepointService } from '@/services/sharepointService';
@@ -85,7 +86,7 @@ export default function SharePointHubPage() {
     }, 4000);
   };
 
-  // MOCK & SUPABASE CLIENTS DATA (Valid UUIDs)
+  // MOCK & SUPABASE CLIENTS DATA (Valid UUIDs & CFO Default Service Type)
   const [clients, setClients] = useState<ClientFolder[]>([
     {
       id: 'c1111111-1111-4111-8111-111111111111',
@@ -93,6 +94,7 @@ export default function SharePointHubPage() {
       name: 'Tập đoàn SunGroup',
       folder_name: '[KH001] - Tập đoàn SunGroup',
       status: 'active',
+      service_type: 'CFO',
       created_at: '2026-01-15T08:30:00Z',
       updated_at: '2026-08-10T14:20:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
@@ -106,6 +108,7 @@ export default function SharePointHubPage() {
       name: 'Tập đoàn Vingroup',
       folder_name: '[KH002] - Tập đoàn Vingroup',
       status: 'active',
+      service_type: 'CFO',
       created_at: '2026-02-01T09:00:00Z',
       updated_at: '2026-08-12T11:15:00Z',
       created_by: 'a1111111-1111-4111-8111-111111111111',
@@ -119,6 +122,7 @@ export default function SharePointHubPage() {
       name: 'Tập đoàn Hòa Phát (Archive)',
       folder_name: '[KH003] - Tập đoàn Hòa Phát',
       status: 'archived',
+      service_type: 'Audit',
       created_at: '2025-05-10T10:00:00Z',
       updated_at: '2026-06-30T16:00:00Z',
       created_by: 'a2222222-2222-4222-8222-222222222222',
@@ -402,12 +406,12 @@ export default function SharePointHubPage() {
     setAuditLogs([newLog, ...auditLogs]);
   };
 
-  // REAL SUPABASE DATABASE PERSISTENCE CREATE CLIENT HANDLER
-  const handleCreateClient = async (code: string, name: string) => {
+  // REAL SUPABASE DATABASE PERSISTENCE CREATE CLIENT HANDLER WITH SERVICE TYPE
+  const handleCreateClient = async (code: string, name: string, serviceType: ServiceType) => {
     const folder_name = `[${code}] - ${name}`;
 
     // 1. Call Supabase Database INSERT
-    const res = await sharepointService.createClient(code, name, currentUser.id);
+    const res = await sharepointService.createClient(code, name, currentUser.id, serviceType);
 
     if (!res.success) {
       addToast('error', 'Lỗi khởi tạo Supabase DB!', res.error);
@@ -420,6 +424,7 @@ export default function SharePointHubPage() {
       name,
       folder_name,
       status: 'active',
+      service_type: serviceType,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: currentUser.id,
@@ -436,18 +441,18 @@ export default function SharePointHubPage() {
     // 3. Revalidate Server Components
     router.refresh();
 
-    pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
-    addToast('success', 'Đã lưu vĩnh viễn vào Supabase Database!', `Folder: ${folder_name}`);
+    pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} (${serviceType}) với 4 subfolders`, undefined, folder_name);
+    addToast('success', 'Đã lưu vĩnh viễn vào Supabase Database!', `Folder: ${folder_name} (Dịch vụ: ${serviceType})`);
 
     return { success: true };
   };
 
-  // REAL SUPABASE DATABASE PERSISTENCE RENAME HANDLER
-  const handleRenameClient = async (clientId: string, newCode: string, newName: string) => {
+  // REAL SUPABASE DATABASE PERSISTENCE RENAME HANDLER WITH SERVICE TYPE
+  const handleRenameClient = async (clientId: string, newCode: string, newName: string, serviceType?: ServiceType) => {
     const folder_name = `[${newCode}] - ${newName}`;
 
-    // 1. Call Supabase DB UPDATE with valid UUID
-    const dbRes = await sharepointService.renameClient(clientId, newCode, newName);
+    // 1. Call Supabase DB UPDATE with valid UUID & serviceType
+    const dbRes = await sharepointService.renameClient(clientId, newCode, newName, serviceType);
 
     if (!dbRes.success) {
       addToast('error', 'Lỗi lưu CSDL Supabase!', dbRes.error);
@@ -463,6 +468,7 @@ export default function SharePointHubPage() {
               code: newCode,
               name: newName,
               folder_name,
+              service_type: serviceType || c.service_type || 'CFO',
               updated_at: new Date().toISOString(),
             }
           : c
@@ -470,13 +476,15 @@ export default function SharePointHubPage() {
     );
 
     if (selectedClient?.id === clientId) {
-      setSelectedClient((prev) => (prev ? { ...prev, code: newCode, name: newName, folder_name } : null));
+      setSelectedClient((prev) =>
+        prev ? { ...prev, code: newCode, name: newName, folder_name, service_type: serviceType || prev.service_type || 'CFO' } : null
+      );
     }
 
     // 3. Revalidate Server Route Cache
     router.refresh();
 
-    pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành ${folder_name}`, undefined, folder_name);
+    pushAuditLog('UPDATE_METADATA', `Cập nhật thông tin thư mục thành ${folder_name}`, undefined, folder_name);
     addToast('success', 'Đã lưu vĩnh viễn vào Supabase Database!', `Tên mới: ${folder_name}`);
 
     return { success: true };
@@ -702,9 +710,16 @@ export default function SharePointHubPage() {
   const activeClientsList = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
   const archivedClientsList = useMemo(() => clients.filter((c) => c.status === 'archived'), [clients]);
 
-  // Filtered List
+  // FILTERED CLIENTS LIST BY SEARCH QUERY & SERVICE TYPE FILTER ('all' | 'Audit' | 'CFO' | 'Consulting' | 'Tax')
   const displayedClients = useMemo(() => {
     let list = activeTab === 'archived_clients' ? archivedClientsList : activeClientsList;
+
+    // 1. Filter by Service Type (Audit, CFO, Consulting, Tax)
+    if (filterState.serviceType && filterState.serviceType !== 'all') {
+      list = list.filter((c) => (c.service_type || 'CFO') === filterState.serviceType);
+    }
+
+    // 2. Filter by Search Query
     const query = globalSearchQuery.toLowerCase() || filterState.searchQuery.toLowerCase();
     if (query) {
       list = list.filter(
@@ -715,7 +730,7 @@ export default function SharePointHubPage() {
       );
     }
     return list;
-  }, [clients, activeTab, globalSearchQuery, filterState.searchQuery, activeClientsList, archivedClientsList]);
+  }, [clients, activeTab, globalSearchQuery, filterState.searchQuery, filterState.serviceType, activeClientsList, archivedClientsList]);
 
   const displayedFiles = useMemo(() => {
     let list = files;
@@ -882,6 +897,11 @@ export default function SharePointHubPage() {
                       ? 'Cài Đặt Hệ Thống & Quản Lý Người Dùng'
                       : 'Danh Sách Khách Hàng (Active Clients)'}
                   </span>
+                  {filterState.serviceType !== 'all' && (
+                    <span className="text-xs bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded border border-blue-300">
+                      Lọc Dịch Vụ: {filterState.serviceType}
+                    </span>
+                  )}
                 </h1>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Đồng bộ thời gian thực Supabase Realtime Engine | Fica Holding Financial Workspace
@@ -1020,7 +1040,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Dynamic User Profile Active
+              Next.js 15 App Router | Supabase Realtime Storage | Service Type Filter Active
             </div>
           </footer>
         </main>

@@ -1,17 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, FolderPlus, Sparkles, CheckCircle2, ShieldAlert, Loader2 } from 'lucide-react';
+import { X, FolderPlus, Sparkles, CheckCircle2, ShieldAlert, Loader2, Briefcase } from 'lucide-react';
+import { ServiceType } from '@/types/sharepoint';
 
 interface NewClientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateClient: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  onCreateClient: (code: string, name: string, serviceType: ServiceType) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose, onCreateClient }) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceType>('CFO');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,12 +29,13 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
     setLoading(true);
     setError('');
 
-    const res = await onCreateClient(code.trim().toUpperCase(), name.trim());
+    const res = await onCreateClient(code.trim().toUpperCase(), name.trim(), serviceType);
     setLoading(false);
 
     if (res.success) {
       setCode('');
       setName('');
+      setServiceType('CFO');
       onClose();
     } else {
       setError(res.error || 'Tạo khách hàng thất bại. Vui lòng kiểm tra lại Supabase Database!');
@@ -72,22 +75,44 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">
-              Mã Khách hàng (Client Code) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              placeholder="VD: KH005, MASAN, VINGROUP"
-              value={code}
-              disabled={loading}
-              onChange={(e) => {
-                setCode(e.target.value);
-                setError('');
-              }}
-              className="w-full text-xs font-mono uppercase p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100"
-              required
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Mã KH (Code) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="VD: KH005, MASAN"
+                value={code}
+                disabled={loading}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setError('');
+                }}
+                className="w-full text-xs font-mono uppercase p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Loại Dịch vụ Fica <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Briefcase className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
+                <select
+                  value={serviceType}
+                  disabled={loading}
+                  onChange={(e) => setServiceType(e.target.value as ServiceType)}
+                  className="w-full text-xs p-2.5 pl-8 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 font-semibold bg-white disabled:bg-slate-100"
+                >
+                  <option value="CFO">CFO (Tư vấn CFO)</option>
+                  <option value="Audit">Audit (Kiểm toán)</option>
+                  <option value="Consulting">Consulting (Tư vấn)</option>
+                  <option value="Tax">Tax (Tư vấn Thuế)</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -110,9 +135,14 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose,
 
           {/* Folder name preview */}
           {code && name && (
-            <div className="p-3 bg-blue-50/80 rounded-lg border border-blue-200 text-xs">
-              <span className="text-slate-500">Tên Folder cha tự sinh: </span>
-              <p className="font-bold text-blue-900 font-mono mt-0.5">[{code.toUpperCase()}] - {name}</p>
+            <div className="p-3 bg-blue-50/80 rounded-lg border border-blue-200 text-xs flex items-center justify-between">
+              <div>
+                <span className="text-slate-500">Folder tự sinh: </span>
+                <p className="font-bold text-blue-900 font-mono mt-0.5">[{code.toUpperCase()}] - {name}</p>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-600 text-white rounded font-mono">
+                {serviceType}
+              </span>
             </div>
           )}
 
