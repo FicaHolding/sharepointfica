@@ -39,33 +39,33 @@ export default function SharePointHubPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Active Logged In User State
+  // Active Logged In User State (Valid UUID)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'usr-1',
+    id: 'a1111111-1111-4111-8111-111111111111',
     email: 'fica.holding@gmail.com',
     full_name: 'Nguyễn Văn Nam',
     role: 'admin',
     department: 'Ban Giám Đốc Fica Holding',
   });
 
-  // User Management State
+  // User Management State (Valid UUIDs)
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([
     {
-      id: 'usr-1',
+      id: 'a1111111-1111-4111-8111-111111111111',
       email: 'fica.holding@gmail.com',
       full_name: 'Nguyễn Văn Nam',
       role: 'admin',
       department: 'Ban Giám Đốc Fica Holding',
     },
     {
-      id: 'usr-2',
+      id: 'a2222222-2222-4222-8222-222222222222',
       email: 'mai.tt@fica.vn',
       full_name: 'Trần Thị Mai',
       role: 'manager',
       department: 'Phòng Thẩm Định & Kiểm Toán',
     },
     {
-      id: 'usr-3',
+      id: 'a3333333-3333-4333-8333-333333333333',
       email: 'son.pt@fica.vn',
       full_name: 'Phạm Thanh Sơn',
       role: 'staff',
@@ -84,43 +84,43 @@ export default function SharePointHubPage() {
     }, 4000);
   };
 
-  // MOCK & SUPABASE CLIENTS DATA
+  // MOCK & SUPABASE CLIENTS DATA (Valid UUIDs)
   const [clients, setClients] = useState<ClientFolder[]>([
     {
-      id: 'cli-1',
+      id: 'c1111111-1111-4111-8111-111111111111',
       code: 'KH001',
       name: 'Tập đoàn SunGroup',
       folder_name: '[KH001] - Tập đoàn SunGroup',
       status: 'active',
       created_at: '2026-01-15T08:30:00Z',
       updated_at: '2026-08-10T14:20:00Z',
-      created_by: 'usr-1',
+      created_by: 'a1111111-1111-4111-8111-111111111111',
       created_by_name: 'Nguyễn Văn Nam',
       total_files_count: 4,
       total_size_mb: 24.5,
     },
     {
-      id: 'cli-2',
+      id: 'c2222222-2222-4222-8222-222222222222',
       code: 'KH002',
       name: 'Tập đoàn Vingroup',
       folder_name: '[KH002] - Tập đoàn Vingroup',
       status: 'active',
       created_at: '2026-02-01T09:00:00Z',
       updated_at: '2026-08-12T11:15:00Z',
-      created_by: 'usr-1',
+      created_by: 'a1111111-1111-4111-8111-111111111111',
       created_by_name: 'Nguyễn Văn Nam',
       total_files_count: 4,
       total_size_mb: 48.2,
     },
     {
-      id: 'cli-3',
+      id: 'c3333333-3333-4333-8333-333333333333',
       code: 'KH003',
       name: 'Tập đoàn Hòa Phát (Archive)',
       folder_name: '[KH003] - Tập đoàn Hòa Phát',
       status: 'archived',
       created_at: '2025-05-10T10:00:00Z',
       updated_at: '2026-06-30T16:00:00Z',
-      created_by: 'usr-1',
+      created_by: 'a2222222-2222-4222-8222-222222222222',
       created_by_name: 'Trần Thị Mai',
       total_files_count: 4,
       total_size_mb: 112.0,
@@ -221,52 +221,52 @@ export default function SharePointHubPage() {
   // Drag and Drop Zone State
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  // Standard 4 subfolders template
+  // Standard 4 subfolders template with Valid UUIDs
   const createSubfoldersForClient = (clientId: string): FolderItem[] => [
     {
-      id: `sf-${clientId}-1`,
+      id: `sf111111-1111-4111-8111-${clientId.substring(0, 12)}`,
       client_id: clientId,
       name: '01_Pháp lý & Hợp đồng',
       is_system_folder: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: 'usr-1',
+      created_by: currentUser.id,
     },
     {
-      id: `sf-${clientId}-2`,
+      id: `sf222222-2222-4222-8222-${clientId.substring(0, 12)}`,
       client_id: clientId,
       name: '02_Chứng từ & Báo cáo Tài chính',
       is_system_folder: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: 'usr-1',
+      created_by: currentUser.id,
     },
     {
-      id: `sf-${clientId}-3`,
+      id: `sf333333-3333-4333-8333-${clientId.substring(0, 12)}`,
       client_id: clientId,
       name: '03_Dự án Tư vấn & Kiểm toán',
       is_system_folder: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: 'usr-1',
+      created_by: currentUser.id,
     },
     {
-      id: `sf-${clientId}-4`,
+      id: `sf444444-4444-4444-8444-${clientId.substring(0, 12)}`,
       client_id: clientId,
       name: '04_Báo cáo Nghiệm thu',
       is_system_folder: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: 'usr-1',
+      created_by: currentUser.id,
     },
   ];
 
-  // MOCK FILES DATA
+  // MOCK FILES DATA (Valid UUIDs)
   const [files, setFiles] = useState<DocumentFile[]>([
     {
-      id: 'file-1',
-      client_id: 'cli-1',
-      folder_id: 'sf-cli-1-1',
+      id: 'f1111111-1111-4111-8111-111111111111',
+      client_id: 'c1111111-1111-4111-8111-111111111111',
+      folder_id: 'sf111111-1111-4111-8111-c1111111-1111',
       name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
       current_version: 2,
       file_size: 4250100,
@@ -278,14 +278,14 @@ export default function SharePointHubPage() {
       tags: ['Hợp đồng', 'Pháp lý', 'CFO'],
       created_at: '2026-01-20T10:00:00Z',
       updated_at: '2026-08-01T15:30:00Z',
-      created_by: 'usr-1',
+      created_by: 'a1111111-1111-4111-8111-111111111111',
       created_by_name: 'Nguyễn Văn Nam',
       modified_by_name: 'Lê Hoàng Anh',
     },
     {
-      id: 'file-2',
-      client_id: 'cli-1',
-      folder_id: 'sf-cli-1-2',
+      id: 'f2222222-2222-4222-8222-222222222222',
+      client_id: 'c1111111-1111-4111-8111-111111111111',
+      folder_id: 'sf222222-2222-4222-8222-c1111111-1111',
       name: 'Bao_Cao_Tai_Chinh_Kiem_Toan_2024.xlsx',
       current_version: 1,
       file_size: 8900400,
@@ -297,14 +297,14 @@ export default function SharePointHubPage() {
       tags: ['Báo cáo tài chính', 'Kiểm toán'],
       created_at: '2026-03-12T09:15:00Z',
       updated_at: '2026-03-12T09:15:00Z',
-      created_by: 'usr-1',
+      created_by: 'a1111111-1111-4111-8111-111111111111',
       created_by_name: 'Nguyễn Văn Nam',
       modified_by_name: 'Nguyễn Văn Nam',
     },
     {
-      id: 'file-3',
-      client_id: 'cli-2',
-      folder_id: 'sf-cli-2-3',
+      id: 'f3333333-3333-4333-8333-333333333333',
+      client_id: 'c2222222-2222-4222-8222-222222222222',
+      folder_id: 'sf333333-3333-4333-8333-c2222222-2222',
       name: 'Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
       current_version: 3,
       file_size: 6100200,
@@ -316,45 +316,34 @@ export default function SharePointHubPage() {
       tags: ['Dự án CFO', 'Kiểm toán'],
       created_at: '2026-06-01T14:00:00Z',
       updated_at: '2026-08-11T16:45:00Z',
-      created_by: 'usr-1',
+      created_by: 'a3333333-3333-4333-8333-333333333333',
       created_by_name: 'Phạm Thanh Sơn',
       modified_by_name: 'Nguyễn Văn Nam',
     },
   ]);
 
-  // AUDIT LOGS STATE
+  // AUDIT LOGS STATE (Valid UUIDs)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
     {
-      id: 'log-1',
+      id: 'l1111111-1111-4111-8111-111111111111',
       client_name: '[KH001] - Tập đoàn SunGroup',
       file_name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
       action_type: 'UPLOAD_FILE',
       action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm tài chính 2025',
-      performed_by: 'usr-1',
+      performed_by: 'a1111111-1111-4111-8111-111111111111',
       performed_by_name: 'Nguyễn Văn Nam',
       performed_by_role: 'admin',
       created_at: '2026-08-12T10:30:00Z',
     },
     {
-      id: 'log-2',
+      id: 'l2222222-2222-4222-8222-222222222222',
       client_name: '[KH003] - Tập đoàn Hòa Phát',
       action_type: 'ARCHIVE_CLIENT',
       action_details: 'Đã đóng dự án và chuyển hồ sơ khách hàng sang chế độ Read-Only Archive',
-      performed_by: 'usr-1',
+      performed_by: 'a2222222-2222-4222-8222-222222222222',
       performed_by_name: 'Trần Thị Mai',
       performed_by_role: 'manager',
       created_at: '2026-08-11T14:15:00Z',
-    },
-    {
-      id: 'log-3',
-      client_name: '[KH002] - Tập đoàn Vingroup',
-      file_name: 'Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
-      action_type: 'DOWNLOAD_FILE',
-      action_details: 'Đã tải tài liệu báo cáo dự án tư vấn về máy tính',
-      performed_by: 'usr-1',
-      performed_by_name: 'Phạm Thanh Sơn',
-      performed_by_role: 'staff',
-      created_at: '2026-08-10T16:40:00Z',
     },
   ]);
 
@@ -366,7 +355,7 @@ export default function SharePointHubPage() {
     clientName?: string
   ) => {
     const newLog: AuditLog = {
-      id: `log-${Date.now()}`,
+      id: crypto.randomUUID(),
       client_name: clientName || selectedClient?.folder_name || 'System',
       file_name: fileName,
       action_type: actionType,
@@ -383,7 +372,7 @@ export default function SharePointHubPage() {
   const handleRenameClient = async (clientId: string, newCode: string, newName: string) => {
     const folder_name = `[${newCode}] - ${newName}`;
 
-    // 1. Call Supabase DB UPDATE
+    // 1. Call Supabase DB UPDATE with valid UUID
     const dbRes = await sharepointService.renameClient(clientId, newCode, newName);
 
     if (!dbRes.success) {
@@ -428,7 +417,7 @@ export default function SharePointHubPage() {
       await handleArchiveClient(target);
       addToast('info', 'Đã chuyển hồ sơ vào Thùng rác (Archive)', `Hồ sơ ${target.folder_name} hiện ở dạng Read-Only.`);
     } else {
-      const ok = await sharepointService.deleteClient(clientId, 'permanent');
+      await sharepointService.deleteClient(clientId, 'permanent');
       setClients((prev) => prev.filter((c) => c.id !== clientId));
       setFiles((prev) => prev.filter((f) => f.client_id !== clientId));
       if (selectedClient?.id === clientId) {
@@ -445,7 +434,7 @@ export default function SharePointHubPage() {
   const handleAddUser = (newUser: Omit<UserProfile, 'id'>) => {
     const created: UserProfile = {
       ...newUser,
-      id: `usr-${Date.now()}`,
+      id: crypto.randomUUID(),
     };
     setSystemUsers([...systemUsers, created]);
     pushAuditLog('CREATE_CLIENT', `Thêm tài khoản người dùng mới ${newUser.full_name} (${newUser.email}) - Role: ${newUser.role}`);
@@ -463,7 +452,7 @@ export default function SharePointHubPage() {
 
     const folder_name = `[${code}] - ${name}`;
     const newClient: ClientFolder = created || {
-      id: `cli-${Date.now()}`,
+      id: crypto.randomUUID(),
       code,
       name,
       folder_name,
@@ -526,10 +515,10 @@ export default function SharePointHubPage() {
   }) => {
     if (!selectedClient) return;
 
-    const folderId = selectedSubFolder ? selectedSubFolder.id : `sf-${selectedClient.id}-1`;
+    const folderId = selectedSubFolder ? selectedSubFolder.id : `sf111111-1111-4111-8111-${selectedClient.id.substring(0, 12)}`;
 
     const newFile: DocumentFile = {
-      id: `file-${Date.now()}`,
+      id: crypto.randomUUID(),
       client_id: selectedClient.id,
       folder_id: folderId,
       name: data.name,
@@ -978,7 +967,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | DB Persistence Enabled
+              Next.js 15 App Router | Supabase Realtime Storage | Valid RFC4122 UUID Format
             </div>
           </footer>
         </main>
