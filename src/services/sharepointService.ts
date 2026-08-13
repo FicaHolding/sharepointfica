@@ -28,36 +28,66 @@ export const sharepointService = {
     }
   },
 
-  // Create new client folder in Supabase Database
-  async createClient(code: string, name: string, createdBy: string): Promise<ClientFolder | null> {
+  // Create new client folder in Supabase Database with REAL PERSISTENCE & UUID
+  async createClient(code: string, name: string, createdBy: string): Promise<{ success: boolean; client?: ClientFolder; error?: string }> {
     const folder_name = `[${code}] - ${name}`;
-    const validCreatedBy = isValidUUID(createdBy) ? createdBy : null;
+    const newId = crypto.randomUUID();
+    const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
 
     try {
+      // 1. Direct INSERT into Supabase `clients` table
       const { data, error } = await supabase
         .from('clients')
-        .insert([{ code, name, folder_name, status: 'active', created_by: validCreatedBy }])
+        .insert([
+          {
+            id: newId,
+            code,
+            name,
+            folder_name,
+            status: 'active',
+            created_by: validCreatedBy,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
         .select()
         .single();
 
       if (error) {
-        console.warn('Error creating client in Supabase:', error.message);
-        return null;
+        console.error('Supabase Database INSERT Error:', error.message);
+
+        if (error.message.includes("Could not find the table 'public.clients'")) {
+          return {
+            success: false,
+            error: "Bảng 'public.clients' chưa được tạo trên Supabase. Vui lòng chạy câu lệnh SQL khởi tạo bảng trong Supabase SQL Editor!",
+          };
+        }
+
+        if (error.code === '23505' || error.message.includes('unique constraint')) {
+          return {
+            success: false,
+            error: `Mã khách hàng [${code}] đã tồn tại trong hệ thống. Vui lòng nhập mã KH khác!`,
+          };
+        }
+
+        return { success: false, error: error.message };
       }
 
+      // 2. Audit Trail Entry
       await this.logAudit({
         client_id: data.id,
         client_name: data.folder_name,
         action_type: 'CREATE_CLIENT',
         action_details: `Khởi tạo Khách hàng mới [${code}] - ${name} với 4 thư mục con tự động`,
-        performed_by: validCreatedBy || undefined,
+        performed_by: validCreatedBy,
         performed_by_name: 'Nguyễn Văn Nam',
         performed_by_role: 'admin',
       });
 
-      return data;
-    } catch {
-      return null;
+      return { success: true, client: data };
+    } catch (err: any) {
+      console.error('Create Client Exception:', err.message);
+      return { success: false, error: err.message || 'Lỗi kết nối cơ sở dữ liệu Supabase' };
     }
   },
 
@@ -65,32 +95,26 @@ export const sharepointService = {
   async renameClient(clientId: string, newCode: string, newName: string): Promise<{ success: boolean; error?: string }> {
     const folder_name = `[${newCode}] - ${newName}`;
 
-    // 1. If not a valid UUID format (legacy string), attempt upsert or handle gracefully
     if (!isValidUUID(clientId)) {
       console.warn('Client ID is non-UUID format:', clientId, 'Attempting upsert with valid UUID...');
       try {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('clients')
           .upsert({
             code: newCode,
             name: newName,
             folder_name: folder_name,
             status: 'active',
-          })
-          .select();
-
-        if (error) {
-          console.warn('Upsert non-UUID client warning:', error.message);
-        }
+          });
+        if (error) console.warn('Upsert warning:', error.message);
         return { success: true };
       } catch {
         return { success: true };
       }
     }
 
-    // 2. Valid UUID - Send UPDATE directly to Supabase `clients` table
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('clients')
         .update({
           code: newCode,
@@ -104,23 +128,22 @@ export const sharepointService = {
       if (error) {
         console.error('Supabase Database UPDATE Error:', error.message);
 
-        // If table doesn't exist in schema cache yet
         if (error.message.includes("Could not find the table 'public.clients'")) {
           return {
             success: false,
-            error: "Bảng 'public.clients' chưa được tạo trên Supabase. Vui lòng copy đoạn mã SQL bên dưới dán vào Supabase SQL Editor để khởi tạo!",
+            error: "Bảng 'public.clients' chưa được tạo trên Supabase. Vui lòng copy đoạn mã SQL dán vào Supabase SQL Editor!",
           };
         }
 
         return { success: false, error: error.message };
       }
 
-      // Log Audit Trail Entry
       await this.logAudit({
         client_id: clientId,
         client_name: folder_name,
         action_type: 'UPDATE_METADATA',
         action_details: `Đổi tên thư mục thành [${newCode}] - ${newName}`,
+        performed_by: 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: 'Admin',
         performed_by_role: 'admin',
       });
@@ -151,6 +174,7 @@ export const sharepointService = {
         client_id: clientId,
         action_type: 'DELETE_FILE',
         action_details: `Xóa vĩnh viễn thư mục khách hàng và toàn bộ dữ liệu con`,
+        performed_by: 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: 'Admin',
         performed_by_role: 'admin',
       });
@@ -180,6 +204,7 @@ export const sharepointService = {
         client_id: clientId,
         action_type: status === 'archived' ? 'ARCHIVE_CLIENT' : 'RESTORE_CLIENT',
         action_details: status === 'archived' ? 'Archive hồ sơ sang Read-Only Mode' : 'Khôi phục hồ sơ sang Active Mode',
+        performed_by: 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: performedByName,
         performed_by_role: 'admin',
       });
@@ -226,6 +251,7 @@ export const sharepointService = {
         .from('files')
         .insert([
           {
+            id: crypto.randomUUID(),
             client_id: clientId,
             folder_id: folderId,
             name: metadata.name,
@@ -254,6 +280,7 @@ export const sharepointService = {
         file_name: metadata.name,
         action_type: 'UPLOAD_FILE',
         action_details: `Tải lên file ${metadata.name} (Năm ${metadata.fiscalYear}, Dịch vụ ${metadata.serviceType})`,
+        performed_by: isValidUUID(metadata.createdBy) ? metadata.createdBy : 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: metadata.createdByName,
         performed_by_role: 'admin',
       });
@@ -273,6 +300,7 @@ export const sharepointService = {
 
       await supabase.from('audit_logs').insert([
         {
+          id: crypto.randomUUID(),
           ...log,
           client_id: validClientId,
           file_id: validFileId,

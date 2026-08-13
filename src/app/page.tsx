@@ -368,6 +368,46 @@ export default function SharePointHubPage() {
     setAuditLogs([newLog, ...auditLogs]);
   };
 
+  // REAL SUPABASE DATABASE PERSISTENCE CREATE CLIENT HANDLER
+  const handleCreateClient = async (code: string, name: string) => {
+    const folder_name = `[${code}] - ${name}`;
+
+    // 1. Call Supabase Database INSERT
+    const res = await sharepointService.createClient(code, name, currentUser.id);
+
+    if (!res.success) {
+      addToast('error', 'Lỗi khởi tạo Supabase DB!', res.error);
+      return { success: false, error: res.error };
+    }
+
+    const newClient: ClientFolder = res.client || {
+      id: crypto.randomUUID(),
+      code,
+      name,
+      folder_name,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_by: currentUser.id,
+      created_by_name: currentUser.full_name,
+      total_files_count: 4,
+      total_size_mb: 0,
+    };
+
+    // 2. Update local state
+    setClients([newClient, ...clients]);
+    setSelectedClient(newClient);
+    setSelectedSubFolder(null);
+
+    // 3. Revalidate Server Components
+    router.refresh();
+
+    pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
+    addToast('success', 'Đã lưu vĩnh viễn vào Supabase Database!', `Folder: ${folder_name}`);
+
+    return { success: true };
+  };
+
   // REAL SUPABASE DATABASE PERSISTENCE RENAME HANDLER
   const handleRenameClient = async (clientId: string, newCode: string, newName: string) => {
     const folder_name = `[${newCode}] - ${newName}`;
@@ -444,34 +484,6 @@ export default function SharePointHubPage() {
   const handleDeleteUser = (userId: string) => {
     setSystemUsers(systemUsers.filter((u) => u.id !== userId));
     addToast('info', 'Đã gỡ bỏ tài khoản người dùng.');
-  };
-
-  // Handle Client Creation
-  const handleCreateClient = async (code: string, name: string) => {
-    const created = await sharepointService.createClient(code, name, currentUser.id);
-
-    const folder_name = `[${code}] - ${name}`;
-    const newClient: ClientFolder = created || {
-      id: crypto.randomUUID(),
-      code,
-      name,
-      folder_name,
-      status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-      created_by_name: currentUser.full_name,
-      total_files_count: 4,
-      total_size_mb: 0,
-    };
-
-    setClients([newClient, ...clients]);
-    setSelectedClient(newClient);
-    setSelectedSubFolder(null);
-    router.refresh();
-
-    pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
-    addToast('success', 'Tạo Khách hàng mới thành công!', `Folder: ${folder_name}`);
   };
 
   // Archive / Restore Client
@@ -967,7 +979,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Valid RFC4122 UUID Format
+              Next.js 15 App Router | Supabase Realtime Storage | DB Insert Persistence Active
             </div>
           </footer>
         </main>

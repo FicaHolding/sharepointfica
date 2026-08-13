@@ -1,28 +1,26 @@
 export type UserRole = 'admin' | 'manager' | 'staff' | 'client';
 
-export type ServiceType = 'Audit' | 'CFO' | 'Consulting' | 'Legal' | 'Tax';
-
-export type FileStatus = 'Draft' | 'Pending' | 'Approved' | 'Archived';
-
 export interface UserProfile {
   id: string;
   email: string;
   full_name: string;
   role: UserRole;
-  avatar_url?: string;
   department?: string;
+  avatar_url?: string;
 }
+
+export type ClientStatus = 'active' | 'archived';
 
 export interface ClientFolder {
   id: string;
-  code: string; // e.g., "KH001"
-  name: string; // e.g., "Tập đoàn SunGroup"
-  folder_name: string; // "[KH001] - Tập đoàn SunGroup"
-  status: 'active' | 'archived';
+  code: string;
+  name: string;
+  folder_name: string; // Format: "[KH001] - Tập đoàn SunGroup"
+  status: ClientStatus;
   created_at: string;
   updated_at: string;
   created_by: string;
-  created_by_name?: string;
+  created_by_name: string;
   total_files_count?: number;
   total_size_mb?: number;
 }
@@ -52,6 +50,9 @@ export interface FileVersion {
   created_by_name: string;
   created_by_avatar?: string;
 }
+
+export type FileStatus = 'Draft' | 'Pending' | 'Approved' | 'Archived';
+export type ServiceType = 'Audit' | 'CFO' | 'Consulting' | 'Legal' | 'Tax';
 
 export interface DocumentFile {
   id: string;
@@ -100,7 +101,7 @@ export interface AuditLog {
   file_name?: string;
   action_type: AuditActionType;
   action_details: string;
-  performed_by: string;
+  performed_by?: string;
   performed_by_name: string;
   performed_by_role: UserRole;
   created_at: string;
