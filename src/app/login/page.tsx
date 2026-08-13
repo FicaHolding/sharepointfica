@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { FicaLogo } from '@/components/sharepoint/FicaLogo';
 import { Shield, Lock, Mail, ArrowRight, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -60,7 +61,6 @@ export default function LoginPage() {
             setErrorMsg(`Đăng nhập thất bại: ${error.message}`);
           }
         } else {
-          // Set demo session cookie as backup
           document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
           router.push('/');
         }
@@ -86,16 +86,14 @@ export default function LoginPage() {
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
 
       <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md relative z-10">
-        {/* Header Branding */}
+        {/* Header Branding with Fica Logo */}
         <div className="p-8 text-center bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-lg shadow-blue-500/20 mb-4 flex items-center justify-center">
-            <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center font-black text-xl text-white tracking-widest">
-              FH
-            </div>
+          <div className="w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+            <FicaLogo className="w-16 h-16" />
           </div>
 
-          <h1 className="text-xl font-bold text-slate-100 tracking-wide">FICA HOLDING</h1>
-          <p className="text-xs text-blue-400 font-medium mt-1">Hệ Thống Quản Trị Tài Liệu Microsoft SharePoint</p>
+          <h1 className="text-xl font-extrabold text-slate-100 tracking-wider">FICA HOLDING</h1>
+          <p className="text-xs text-blue-400 font-semibold mt-1">Hệ Thống Quản Trị Tài Liệu Microsoft SharePoint</p>
         </div>
 
         {/* Tab switcher */}

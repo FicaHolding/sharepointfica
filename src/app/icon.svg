@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="fica-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0078D4" />
+      <stop offset="100%" stop-color="#003A70" />
+    </linearGradient>
+  </defs>
+  <circle cx="250" cy="250" r="230" fill="url(#fica-blue)" />
+  <path d="M250 20 C350 20, 480 120, 480 250 C380 250, 250 350, 250 250 Z" fill="#0284C7" opacity="0.6" />
+  <path d="M480 250 C480 350, 380 480, 250 480 C250 380, 350 250, 250 250 Z" fill="#005A9E" opacity="0.8" />
+  <rect x="175" y="175" width="150" height="150" fill="#FFFFFF" rx="4" />
+</svg>

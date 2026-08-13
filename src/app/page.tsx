@@ -16,6 +16,7 @@ import { FilePreviewModal } from '@/components/sharepoint/FilePreviewModal';
 import { DetailsPane } from '@/components/sharepoint/DetailsPane';
 import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
 import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
+import { UserManagementModal } from '@/components/sharepoint/UserManagementModal';
 import {
   UserProfile,
   ClientFolder,
@@ -23,19 +24,75 @@ import {
   DocumentFile,
   MetadataFilterState,
   AuditLog,
+  UserRole,
 } from '@/types/sharepoint';
-import { Lock, Activity, Info, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { Lock, Activity, Info, UploadCloud, Users, Settings } from 'lucide-react';
 import { sharepointService } from '@/services/sharepointService';
+import { createClient } from '@/utils/supabase/client';
 
 export default function SharePointHubPage() {
-  // Current user state (RBAC role simulation)
+  const supabase = createClient();
+
+  // Active Logged In User State (Dynamic Supabase Session fallback)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'usr-1',
-    email: 'admin@fica.vn',
+    email: 'fica.holding@gmail.com',
     full_name: 'Nguyễn Văn Nam',
     role: 'admin',
     department: 'Ban Giám Đốc Fica Holding',
   });
+
+  // User Management State (Real profiles list)
+  const [systemUsers, setSystemUsers] = useState<UserProfile[]>([
+    {
+      id: 'usr-1',
+      email: 'fica.holding@gmail.com',
+      full_name: 'Nguyễn Văn Nam',
+      role: 'admin',
+      department: 'Ban Giám Đốc Fica Holding',
+    },
+    {
+      id: 'usr-2',
+      email: 'mai.tt@fica.vn',
+      full_name: 'Trần Thị Mai',
+      role: 'manager',
+      department: 'Phòng Thẩm Định & Kiểm Toán',
+    },
+    {
+      id: 'usr-3',
+      email: 'son.pt@fica.vn',
+      full_name: 'Phạm Thanh Sơn',
+      role: 'staff',
+      department: 'Phòng Tư Vấn Tài Chính CFO',
+    },
+  ]);
+
+  // Check Supabase Active Auth Session on Load
+  useEffect(() => {
+    async function checkAuthSession() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session && session.user) {
+          const userEmail = session.user.email || 'fica.holding@gmail.com';
+          const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
+          const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
+
+          setCurrentUser({
+            id: session.user.id,
+            email: userEmail,
+            full_name: metaName,
+            role: metaRole,
+            department: 'Fica Holding JSC',
+          });
+        }
+      } catch {
+        // Fallback demo active session
+      }
+    }
+    checkAuthSession();
+  }, []);
 
   // Main UI Navigation state
   const [activeTab, setActiveTab] = useState<ActiveNavTab>('active_clients');
@@ -59,12 +116,13 @@ export default function SharePointHubPage() {
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
 
-  // Modals, Drawers & Panes visibility states
+  // Modals & Panes visibility states
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
   const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
   const [detailsItem, setDetailsItem] = useState<{
@@ -275,6 +333,20 @@ export default function SharePointHubPage() {
       created_at: new Date().toISOString(),
     };
     setAuditLogs([newLog, ...auditLogs]);
+  };
+
+  // Add User Handler for User Management
+  const handleAddUser = (newUser: Omit<UserProfile, 'id'>) => {
+    const created: UserProfile = {
+      ...newUser,
+      id: `usr-${Date.now()}`,
+    };
+    setSystemUsers([...systemUsers, created]);
+    pushAuditLog('CREATE_CLIENT', `Thêm tài khoản người dùng mới ${newUser.full_name} (${newUser.email}) - Role: ${newUser.role}`);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    setSystemUsers(systemUsers.filter((u) => u.id !== userId));
   };
 
   // Handle Client Creation
@@ -545,6 +617,7 @@ export default function SharePointHubPage() {
         searchQuery={globalSearchQuery}
         onSearchChange={setGlobalSearchQuery}
         onRoleSwitch={(r) => setCurrentUser({ ...currentUser, role: r })}
+        onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -553,11 +626,15 @@ export default function SharePointHubPage() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={(tab) => {
-            setActiveTab(tab);
-            setSelectedClient(null);
-            setSelectedSubFolder(null);
-            setSelectedClientIds([]);
-            setSelectedFileIds([]);
+            if (tab === 'settings') {
+              setIsUserManagementModalOpen(true);
+            } else {
+              setActiveTab(tab);
+              setSelectedClient(null);
+              setSelectedSubFolder(null);
+              setSelectedClientIds([]);
+              setSelectedFileIds([]);
+            }
           }}
           activeCount={activeClientsList.length}
           archivedCount={archivedClientsList.length}
@@ -634,7 +711,7 @@ export default function SharePointHubPage() {
                       : activeTab === 'reports'
                       ? 'Nhật Ký Hoạt Động & Kiểm Toán (Audit Stream)'
                       : activeTab === 'settings'
-                      ? 'Cài Đặt Hệ Thống SharePoint Fica'
+                      ? 'Cài Đặt Hệ Thống & Quản Lý Người Dùng'
                       : 'Danh Sách Khách Hàng (Active Clients)'}
                   </span>
                 </h1>
@@ -769,7 +846,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Bulk Actions Enabled
+              Next.js 15 App Router | Supabase Realtime Storage | User Management RBAC
             </div>
           </footer>
         </main>
@@ -791,6 +868,15 @@ export default function SharePointHubPage() {
       />
 
       {/* Modals, Drawers & Slide-over Panes */}
+      <UserManagementModal
+        isOpen={isUserManagementModalOpen}
+        onClose={() => setIsUserManagementModalOpen(false)}
+        users={systemUsers}
+        onAddUser={handleAddUser}
+        onDeleteUser={handleDeleteUser}
+        currentUserRole={currentUser.role}
+      />
+
       <NewClientModal
         isOpen={isNewClientModalOpen}
         onClose={() => setIsNewClientModalOpen(false)}

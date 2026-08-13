@@ -1,14 +1,32 @@
 'use client';
 
-import React from 'react';
-import { Grid, Search, Bell, Settings, HelpCircle, Shield, UserCheck, ChevronDown, Building2 } from 'lucide-react';
-import { UserProfile } from '@/types/sharepoint';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
+import { FicaLogo } from '@/components/sharepoint/FicaLogo';
+import {
+  Grid,
+  Search,
+  Bell,
+  Settings,
+  HelpCircle,
+  Shield,
+  UserCheck,
+  ChevronDown,
+  LogOut,
+  User,
+  Users,
+  Building2,
+  CheckCircle2,
+} from 'lucide-react';
+import { UserProfile, UserRole } from '@/types/sharepoint';
 
 interface TopbarProps {
   currentUser: UserProfile;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onRoleSwitch: (role: UserProfile['role']) => void;
+  onRoleSwitch: (role: UserRole) => void;
+  onOpenUserManagement?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -16,10 +34,25 @@ export const Topbar: React.FC<TopbarProps> = ({
   searchQuery,
   onSearchChange,
   onRoleSwitch,
+  onOpenUserManagement,
 }) => {
-  const [showRoleMenu, setShowRoleMenu] = React.useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showRoleSubMenu, setShowRoleSubMenu] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
 
-  const getRoleBadgeColor = (role: UserProfile['role']) => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore
+    }
+    // Delete demo session cookie
+    document.cookie = 'fica_demo_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    router.push('/login');
+  };
+
+  const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case 'admin':
         return 'bg-purple-600 text-white';
@@ -36,8 +69,8 @@ export const Topbar: React.FC<TopbarProps> = ({
 
   return (
     <header className="h-14 bg-[#0F172A] text-white flex items-center justify-between px-4 border-b border-slate-800 select-none z-30 sticky top-0 shadow-md">
-      {/* Left: App Launcher & Logo */}
-      <div className="flex items-center space-x-3 min-w-[260px]">
+      {/* Left: App Launcher & FICA Logo */}
+      <div className="flex items-center space-x-3 min-w-[280px]">
         <button
           title="App Launcher"
           className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-300 hover:text-white"
@@ -46,9 +79,9 @@ export const Topbar: React.FC<TopbarProps> = ({
         </button>
 
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-inner font-bold text-white text-sm tracking-wider border border-blue-400/30">
-            FH
-          </div>
+          {/* Official Fica Holding Symbol Component */}
+          <FicaLogo className="w-8 h-8" />
+
           <div>
             <div className="flex items-center space-x-1.5 font-bold tracking-wide text-sm text-slate-100">
               <span>FICA HOLDING</span>
@@ -97,66 +130,126 @@ export const Topbar: React.FC<TopbarProps> = ({
           <HelpCircle className="w-4 h-4" />
         </button>
 
-        <button
-          title="Cài đặt hệ thống"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+        {currentUser.role === 'admin' && onOpenUserManagement && (
+          <button
+            onClick={onOpenUserManagement}
+            title="Quản lý Người dùng & Phân quyền"
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+          >
+            <Users className="w-4 h-4 text-blue-400" />
+          </button>
+        )}
 
         <div className="h-5 w-[1px] bg-slate-700 mx-1" />
 
-        {/* User Role Switcher Dropdown */}
+        {/* User Profile Badge & Dropdown Menu */}
         <div className="relative">
           <button
-            onClick={() => setShowRoleMenu(!showRoleMenu)}
-            className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-md transition-colors"
+            onClick={() => setShowUserDropdown(!showUserDropdown)}
+            className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-md transition-colors border border-slate-800 hover:border-slate-700"
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 text-white font-semibold text-xs flex items-center justify-center shadow">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
               {currentUser.full_name.substring(0, 2).toUpperCase()}
             </div>
             <div className="text-left hidden lg:block">
-              <div className="text-xs font-semibold text-slate-200 leading-tight flex items-center space-x-1">
+              <div className="text-xs font-bold text-slate-100 leading-tight flex items-center space-x-1.5">
                 <span>{currentUser.full_name}</span>
                 <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(currentUser.role)}`}>
                   {currentUser.role}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 truncate max-w-[130px]">{currentUser.email}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">{currentUser.email}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {showRoleMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-xl py-2 z-50 animate-fade-in text-slate-200">
-              <div className="px-3 py-2 border-b border-slate-800">
-                <p className="text-xs font-semibold text-slate-300">Giả lập Phân quyền RBAC:</p>
-                <p className="text-[11px] text-slate-400">Chọn vai trò để trải nghiệm RLS R&W/Read-Only</p>
-              </div>
-
-              <div className="py-1">
-                {(['admin', 'manager', 'staff', 'client'] as UserProfile['role'][]).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      onRoleSwitch(r);
-                      setShowRoleMenu(false);
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-slate-800 transition-colors ${
-                      currentUser.role === r ? 'bg-blue-900/40 text-blue-300 font-semibold' : 'text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2 capitalize">
-                      <Shield className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{r}</span>
+          {/* POPUP DROPDOWN MENU */}
+          {showUserDropdown && (
+            <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-fade-in text-slate-200 divide-y divide-slate-800">
+              {/* User Identity Section */}
+              <div className="px-4 py-3 bg-slate-950/60">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow">
+                    {currentUser.full_name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-100">{currentUser.full_name}</h4>
+                    <p className="text-xs text-slate-400 font-mono">{currentUser.email}</p>
+                    <div className="mt-1 flex items-center space-x-1">
+                      <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(currentUser.role)}`}>
+                        {currentUser.role}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">{currentUser.department || 'Fica Holding'}</span>
                     </div>
-                    {currentUser.role === r && <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
-                  </button>
-                ))}
+                  </div>
+                </div>
               </div>
 
-              <div className="px-3 py-1.5 border-t border-slate-800 mt-1">
-                <span className="text-[11px] text-slate-400">Đơn vị: <strong>Fica Holding JSC</strong></span>
+              {/* Navigation Actions */}
+              <div className="py-1">
+                <button
+                  onClick={() => alert(`Hồ sơ cá nhân: ${currentUser.full_name} (${currentUser.email})`)}
+                  className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <User className="w-4 h-4 text-blue-400" />
+                  <span>Hồ sơ cá nhân (My Profile)</span>
+                </button>
+
+                {currentUser.role === 'admin' && onOpenUserManagement && (
+                  <button
+                    onClick={() => {
+                      onOpenUserManagement();
+                      setShowUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                  >
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Quản lý Người dùng & RBAC</span>
+                  </button>
+                )}
+
+                {/* Submenu toggle for Role Switcher */}
+                <button
+                  onClick={() => setShowRoleSubMenu(!showRoleSubMenu)}
+                  className="w-full text-left px-4 py-2 text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Shield className="w-4 h-4 text-amber-400" />
+                    <span>Giả lập Chuyển đổi Vai trò</span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                {showRoleSubMenu && (
+                  <div className="bg-slate-950/80 my-1 py-1 px-2 border-y border-slate-800">
+                    {(['admin', 'manager', 'staff', 'client'] as UserRole[]).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => {
+                          onRoleSwitch(r);
+                          setShowRoleSubMenu(false);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-800 rounded transition-colors uppercase font-mono ${
+                          currentUser.role === r ? 'text-blue-400 font-bold' : 'text-slate-400'
+                        }`}
+                      >
+                        <span>{r}</span>
+                        {currentUser.role === r && <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* LOGOUT BUTTON */}
+              <div className="p-1">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-red-400 hover:bg-red-950/50 hover:text-red-300 rounded transition-colors font-bold"
+                >
+                  <LogOut className="w-4 h-4 text-red-400" />
+                  <span>Đăng xuất (Sign Out)</span>
+                </button>
               </div>
             </div>
           )}
