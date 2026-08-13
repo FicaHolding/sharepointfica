@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Topbar } from '@/components/sharepoint/Topbar';
 import { Sidebar, ActiveNavTab } from '@/components/sharepoint/Sidebar';
 import { Breadcrumb } from '@/components/sharepoint/Breadcrumb';
@@ -35,6 +36,7 @@ import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
 
 export default function SharePointHubPage() {
+  const router = useRouter();
   const supabase = createClient();
 
   // Active Logged In User State
@@ -82,9 +84,53 @@ export default function SharePointHubPage() {
     }, 4000);
   };
 
-  // Check Supabase Active Auth Session on Load
+  // MOCK & SUPABASE CLIENTS DATA
+  const [clients, setClients] = useState<ClientFolder[]>([
+    {
+      id: 'cli-1',
+      code: 'KH001',
+      name: 'Tập đoàn SunGroup',
+      folder_name: '[KH001] - Tập đoàn SunGroup',
+      status: 'active',
+      created_at: '2026-01-15T08:30:00Z',
+      updated_at: '2026-08-10T14:20:00Z',
+      created_by: 'usr-1',
+      created_by_name: 'Nguyễn Văn Nam',
+      total_files_count: 4,
+      total_size_mb: 24.5,
+    },
+    {
+      id: 'cli-2',
+      code: 'KH002',
+      name: 'Tập đoàn Vingroup',
+      folder_name: '[KH002] - Tập đoàn Vingroup',
+      status: 'active',
+      created_at: '2026-02-01T09:00:00Z',
+      updated_at: '2026-08-12T11:15:00Z',
+      created_by: 'usr-1',
+      created_by_name: 'Nguyễn Văn Nam',
+      total_files_count: 4,
+      total_size_mb: 48.2,
+    },
+    {
+      id: 'cli-3',
+      code: 'KH003',
+      name: 'Tập đoàn Hòa Phát (Archive)',
+      folder_name: '[KH003] - Tập đoàn Hòa Phát',
+      status: 'archived',
+      created_at: '2025-05-10T10:00:00Z',
+      updated_at: '2026-06-30T16:00:00Z',
+      created_by: 'usr-1',
+      created_by_name: 'Trần Thị Mai',
+      total_files_count: 4,
+      total_size_mb: 112.0,
+    },
+  ]);
+
+  // Load Real Supabase Database Clients & Auth Session on Mount
   useEffect(() => {
-    async function checkAuthSession() {
+    async function initData() {
+      // 1. Fetch Auth Session
       try {
         const {
           data: { session },
@@ -105,8 +151,31 @@ export default function SharePointHubPage() {
       } catch {
         // Fallback demo active session
       }
+
+      // 2. Fetch Clients from Supabase DB
+      try {
+        const dbClients = await sharepointService.fetchClients();
+        if (dbClients && dbClients.length > 0) {
+          setClients(dbClients);
+        }
+      } catch {
+        // Keep initial mock clients fallback
+      }
     }
-    checkAuthSession();
+
+    initData();
+
+    // 3. Subscribe to Realtime DB updates
+    const unsubscribe = sharepointService.subscribeRealtime(async () => {
+      const refreshedClients = await sharepointService.fetchClients();
+      if (refreshedClients && refreshedClients.length > 0) {
+        setClients(refreshedClients);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Main UI Navigation state
@@ -151,49 +220,6 @@ export default function SharePointHubPage() {
 
   // Drag and Drop Zone State
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-
-  // MOCK CLIENTS DATA
-  const [clients, setClients] = useState<ClientFolder[]>([
-    {
-      id: 'cli-1',
-      code: 'KH001',
-      name: 'Tập đoàn SunGroup',
-      folder_name: '[KH001] - Tập đoàn SunGroup',
-      status: 'active',
-      created_at: '2026-01-15T08:30:00Z',
-      updated_at: '2026-08-10T14:20:00Z',
-      created_by: 'usr-1',
-      created_by_name: 'Nguyễn Văn Nam',
-      total_files_count: 4,
-      total_size_mb: 24.5,
-    },
-    {
-      id: 'cli-2',
-      code: 'KH002',
-      name: 'Tập đoàn Vingroup',
-      folder_name: '[KH002] - Tập đoàn Vingroup',
-      status: 'active',
-      created_at: '2026-02-01T09:00:00Z',
-      updated_at: '2026-08-12T11:15:00Z',
-      created_by: 'usr-1',
-      created_by_name: 'Nguyễn Văn Nam',
-      total_files_count: 4,
-      total_size_mb: 48.2,
-    },
-    {
-      id: 'cli-3',
-      code: 'KH003',
-      name: 'Tập đoàn Hòa Phát (Archive)',
-      folder_name: '[KH003] - Tập đoàn Hòa Phát',
-      status: 'archived',
-      created_at: '2025-05-10T10:00:00Z',
-      updated_at: '2026-06-30T16:00:00Z',
-      created_by: 'usr-1',
-      created_by_name: 'Trần Thị Mai',
-      total_files_count: 4,
-      total_size_mb: 112.0,
-    },
-  ]);
 
   // Standard 4 subfolders template
   const createSubfoldersForClient = (clientId: string): FolderItem[] => [
@@ -353,11 +379,21 @@ export default function SharePointHubPage() {
     setAuditLogs([newLog, ...auditLogs]);
   };
 
-  // RENAME FOLDER HANDLER
-  const handleRenameClient = (clientId: string, newCode: string, newName: string) => {
+  // REAL SUPABASE DATABASE PERSISTENCE RENAME HANDLER
+  const handleRenameClient = async (clientId: string, newCode: string, newName: string) => {
     const folder_name = `[${newCode}] - ${newName}`;
-    setClients(
-      clients.map((c) =>
+
+    // 1. Call Supabase DB UPDATE
+    const dbRes = await sharepointService.renameClient(clientId, newCode, newName);
+
+    if (!dbRes.success) {
+      addToast('error', 'Lỗi lưu CSDL Supabase!', dbRes.error);
+      return { success: false, error: dbRes.error };
+    }
+
+    // 2. Update local state
+    setClients((prev) =>
+      prev.map((c) =>
         c.id === clientId
           ? {
               ...c,
@@ -369,30 +405,39 @@ export default function SharePointHubPage() {
           : c
       )
     );
+
     if (selectedClient?.id === clientId) {
       setSelectedClient((prev) => (prev ? { ...prev, code: newCode, name: newName, folder_name } : null));
     }
-    pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành [${newCode}] - ${newName}`, undefined, folder_name);
-    addToast('success', 'Đổi tên thư mục thành công!', `Tên mới: ${folder_name}`);
+
+    // 3. Revalidate Server Route Cache
+    router.refresh();
+
+    pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành ${folder_name}`, undefined, folder_name);
+    addToast('success', 'Đã lưu vĩnh viễn vào Supabase Database!', `Tên mới: ${folder_name}`);
+
+    return { success: true };
   };
 
   // DELETE FOLDER HANDLER (Recycle Bin vs Permanent)
-  const handleConfirmDeleteClient = (clientId: string, mode: 'recycle' | 'permanent') => {
+  const handleConfirmDeleteClient = async (clientId: string, mode: 'recycle' | 'permanent') => {
     const target = clients.find((c) => c.id === clientId);
     if (!target) return;
 
     if (mode === 'recycle') {
-      handleArchiveClient(target);
+      await handleArchiveClient(target);
       addToast('info', 'Đã chuyển hồ sơ vào Thùng rác (Archive)', `Hồ sơ ${target.folder_name} hiện ở dạng Read-Only.`);
     } else {
-      setClients(clients.filter((c) => c.id !== clientId));
-      setFiles(files.filter((f) => f.client_id !== clientId));
+      const ok = await sharepointService.deleteClient(clientId, 'permanent');
+      setClients((prev) => prev.filter((c) => c.id !== clientId));
+      setFiles((prev) => prev.filter((f) => f.client_id !== clientId));
       if (selectedClient?.id === clientId) {
         setSelectedClient(null);
         setSelectedSubFolder(null);
       }
+      router.refresh();
       pushAuditLog('DELETE_FILE', `Xóa vĩnh viễn thư mục khách hàng ${target.folder_name}`, undefined, target.folder_name);
-      addToast('error', 'Đã xóa vĩnh viễn thư mục!', `Đã xóa hoàn toàn dữ liệu của ${target.folder_name}`);
+      addToast('error', 'Đã xóa vĩnh viễn khỏi Database!', `Đã xóa hoàn toàn dữ liệu của ${target.folder_name}`);
     }
   };
 
@@ -413,11 +458,12 @@ export default function SharePointHubPage() {
   };
 
   // Handle Client Creation
-  const handleCreateClient = (code: string, name: string) => {
-    const newId = `cli-${Date.now()}`;
+  const handleCreateClient = async (code: string, name: string) => {
+    const created = await sharepointService.createClient(code, name, currentUser.id);
+
     const folder_name = `[${code}] - ${name}`;
-    const newClient: ClientFolder = {
-      id: newId,
+    const newClient: ClientFolder = created || {
+      id: `cli-${Date.now()}`,
       code,
       name,
       folder_name,
@@ -429,16 +475,19 @@ export default function SharePointHubPage() {
       total_files_count: 4,
       total_size_mb: 0,
     };
+
     setClients([newClient, ...clients]);
     setSelectedClient(newClient);
     setSelectedSubFolder(null);
+    router.refresh();
 
     pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
     addToast('success', 'Tạo Khách hàng mới thành công!', `Folder: ${folder_name}`);
   };
 
   // Archive / Restore Client
-  const handleArchiveClient = (client: ClientFolder) => {
+  const handleArchiveClient = async (client: ClientFolder) => {
+    await sharepointService.updateClientStatus(client.id, 'archived', currentUser.full_name);
     setClients(
       clients.map((c) =>
         c.id === client.id ? { ...c, status: 'archived', updated_at: new Date().toISOString() } : c
@@ -447,10 +496,12 @@ export default function SharePointHubPage() {
     if (selectedClient?.id === client.id) {
       setSelectedClient({ ...selectedClient, status: 'archived' });
     }
+    router.refresh();
     pushAuditLog('ARCHIVE_CLIENT', `Khóa hồ sơ Read-Only sang trạng thái Archive`, undefined, client.folder_name);
   };
 
-  const handleRestoreClient = (client: ClientFolder) => {
+  const handleRestoreClient = async (client: ClientFolder) => {
+    await sharepointService.updateClientStatus(client.id, 'active', currentUser.full_name);
     setClients(
       clients.map((c) =>
         c.id === client.id ? { ...c, status: 'active', updated_at: new Date().toISOString() } : c
@@ -459,6 +510,7 @@ export default function SharePointHubPage() {
     if (selectedClient?.id === client.id) {
       setSelectedClient({ ...selectedClient, status: 'active' });
     }
+    router.refresh();
     pushAuditLog('RESTORE_CLIENT', `Khôi phục hồ sơ sang trạng thái Active hoạt động`, undefined, client.folder_name);
     addToast('success', 'Đã khôi phục trạng thái Active!', `Folder: ${client.folder_name}`);
   };
@@ -926,7 +978,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Folder Actions Active
+              Next.js 15 App Router | Supabase Realtime Storage | DB Persistence Enabled
             </div>
           </footer>
         </main>

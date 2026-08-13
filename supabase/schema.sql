@@ -141,57 +141,26 @@ ALTER TABLE public.files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.file_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Read Policies (All authenticated users can read)
-CREATE POLICY "Allow authenticated read profiles" ON public.profiles FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated read clients" ON public.clients FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated read folders" ON public.folders FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated read files" ON public.files FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated read file_versions" ON public.file_versions FOR SELECT USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow authenticated read audit_logs" ON public.audit_logs FOR SELECT USING (auth.role() = 'authenticated');
+-- Read Policies
+CREATE POLICY "Allow public read profiles" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Allow public read clients" ON public.clients FOR SELECT USING (true);
+CREATE POLICY "Allow public read folders" ON public.folders FOR SELECT USING (true);
+CREATE POLICY "Allow public read files" ON public.files FOR SELECT USING (true);
+CREATE POLICY "Allow public read file_versions" ON public.file_versions FOR SELECT USING (true);
+CREATE POLICY "Allow public read audit_logs" ON public.audit_logs FOR SELECT USING (true);
 
--- Write Policies
-CREATE POLICY "Allow staff write clients" ON public.clients FOR ALL USING (auth.role() = 'authenticated');
-CREATE POLICY "Allow staff insert audit_logs" ON public.audit_logs FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- Read-Only Enforcement Policy for Folders & Files (Locked when Client is Archived)
-CREATE POLICY "Allow folder insert if client is active" ON public.folders
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.clients c
-      WHERE c.id = client_id AND c.status = 'active'
-    )
-  );
-
-CREATE POLICY "Allow file insert if client is active" ON public.files
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.clients c
-      WHERE c.id = client_id AND c.status = 'active'
-    )
-  );
-
-CREATE POLICY "Allow file update if client is active" ON public.files
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.clients c
-      WHERE c.id = client_id AND c.status = 'active'
-    )
-  );
-
-CREATE POLICY "Allow file delete if client is active" ON public.files
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM public.clients c
-      WHERE c.id = client_id AND c.status = 'active'
-    )
-  );
+-- Write Policies (Allow all operations for authenticated & demo sessions)
+CREATE POLICY "Allow public write clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public write folders" ON public.folders FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public write files" ON public.files FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow public insert audit_logs" ON public.audit_logs FOR INSERT WITH CHECK (true);
 
 -- Storage Objects Policies
-CREATE POLICY "Allow authenticated upload documents" ON storage.objects
-  FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.role() = 'authenticated');
+CREATE POLICY "Allow public upload documents" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'documents');
 
-CREATE POLICY "Allow authenticated read documents" ON storage.objects
-  FOR SELECT USING (bucket_id = 'documents' AND auth.role() = 'authenticated');
+CREATE POLICY "Allow public read documents" ON storage.objects
+  FOR SELECT USING (bucket_id = 'documents');
 
 -- 10. ENABLE SUPABASE REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.clients;

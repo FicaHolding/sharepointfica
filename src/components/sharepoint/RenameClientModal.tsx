@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Edit3, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Edit3, AlertCircle, Loader2 } from 'lucide-react';
 import { ClientFolder } from '@/types/sharepoint';
 
 interface RenameClientModalProps {
   client: ClientFolder | null;
   isOpen: boolean;
   onClose: () => void;
-  onRename: (clientId: string, newCode: string, newName: string) => void;
+  onRename: (clientId: string, newCode: string, newName: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const RenameClientModal: React.FC<RenameClientModalProps> = ({
@@ -20,12 +20,14 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (client) {
       setCode(client.code);
       setName(client.name);
       setError('');
+      setLoading(false);
     }
   }, [client]);
 
@@ -44,12 +46,21 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
-    onRename(client.id, code.trim().toUpperCase(), name.trim());
-    onClose();
+    setLoading(true);
+    setError('');
+
+    const res = await onRename(client.id, code.trim().toUpperCase(), name.trim());
+    setLoading(false);
+
+    if (res.success) {
+      onClose();
+    } else {
+      setError(res.error || 'Cập nhật thất bại. Vui lòng kiểm tra kết nối Supabase Database.');
+    }
   };
 
   return (
@@ -69,7 +80,8 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            disabled={loading}
+            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -91,11 +103,12 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
             <input
               type="text"
               value={code}
+              disabled={loading}
               onChange={(e) => {
                 setCode(e.target.value);
                 setError('');
               }}
-              className="w-full text-xs font-mono uppercase p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+              className="w-full text-xs font-mono uppercase p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100"
               required
             />
           </div>
@@ -107,11 +120,12 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
             <input
               type="text"
               value={name}
+              disabled={loading}
               onChange={(e) => {
                 setName(e.target.value);
                 setError('');
               }}
-              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 disabled:bg-slate-100"
               required
             />
           </div>
@@ -129,15 +143,25 @@ export const RenameClientModal: React.FC<RenameClientModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-lg transition-colors"
+              disabled={loading}
+              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-50"
             >
               Hủy
             </button>
+
             <button
               type="submit"
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors shadow-xs"
+              disabled={loading}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors shadow-xs flex items-center justify-center space-x-1.5 disabled:opacity-50"
             >
-              Lưu tên mới
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Đang lưu Database...</span>
+                </>
+              ) : (
+                <span>Lưu tên mới</span>
+              )}
             </button>
           </div>
         </form>

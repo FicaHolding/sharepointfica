@@ -13,16 +13,17 @@ export const sharepointService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Using mock clients fallback:', error.message);
+        console.warn('Error fetching clients from Supabase:', error.message);
         return [];
       }
       return data || [];
-    } catch {
+    } catch (err: any) {
+      console.warn('Database fetch exception:', err.message);
       return [];
     }
   },
 
-  // Create new client folder (Trigger automatically creates 4 subfolders)
+  // Create new client folder in Supabase Database
   async createClient(code: string, name: string, createdBy: string): Promise<ClientFolder | null> {
     const folder_name = `[${code}] - ${name}`;
     try {
@@ -53,20 +54,28 @@ export const sharepointService = {
     }
   },
 
-  // Rename Client Folder
-  async renameClient(clientId: string, newCode: string, newName: string): Promise<boolean> {
+  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE
+  async renameClient(clientId: string, newCode: string, newName: string): Promise<{ success: boolean; error?: string }> {
     const folder_name = `[${newCode}] - ${newName}`;
     try {
-      const { error } = await supabase
+      // 1. Send UPDATE directly to Supabase `clients` table
+      const { data, error } = await supabase
         .from('clients')
-        .update({ code: newCode, name: newName, folder_name, updated_at: new Date().toISOString() })
-        .eq('id', clientId);
+        .update({
+          code: newCode,
+          name: newName,
+          folder_name: folder_name,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', clientId)
+        .select();
 
       if (error) {
-        console.warn('Error renaming client in Supabase:', error.message);
-        return false;
+        console.error('Supabase Database UPDATE Error:', error.message);
+        return { success: false, error: error.message };
       }
 
+      // Log Audit Trail Entry
       await this.logAudit({
         client_id: clientId,
         client_name: folder_name,
@@ -77,9 +86,10 @@ export const sharepointService = {
         performed_by_role: 'admin',
       });
 
-      return true;
-    } catch {
-      return false;
+      return { success: true };
+    } catch (err: any) {
+      console.error('Rename Client Exception:', err.message);
+      return { success: false, error: err.message || 'Lỗi kết nối cơ sở dữ liệu' };
     }
   },
 
