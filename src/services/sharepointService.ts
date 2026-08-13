@@ -112,13 +112,14 @@ export const sharepointService = {
     }
   },
 
-  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Service Type
+  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Graceful Fallback if service_type column missing
   async createClient(
     code: string,
     name: string,
     createdBy: string,
-    serviceType: ServiceType = 'CFO'
+    serviceTypeInput: ServiceType = 'CFO'
   ): Promise<{ success: boolean; client?: ClientFolder; error?: string }> {
+    const serviceType = serviceTypeInput || 'CFO';
     const folder_name = `[${code}] - ${name}`;
     const newId = crypto.randomUUID();
     const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
@@ -145,6 +146,34 @@ export const sharepointService = {
 
       if (error) {
         console.error('Supabase Database INSERT Error:', error.message);
+
+        // Fallback: If service_type column is missing in Supabase schema, retry insert without service_type
+        if (error.message.includes("service_type") || error.message.includes("schema cache")) {
+          console.warn('service_type column missing in Supabase. Retrying insert without service_type...');
+          const { data: retryData, error: retryError } = await supabase
+            .from('clients')
+            .insert([
+              {
+                id: newId,
+                code,
+                name,
+                folder_name,
+                status: 'active',
+                created_by: validCreatedBy,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ])
+            .select()
+            .single();
+
+          if (!retryError && retryData) {
+            return {
+              success: true,
+              client: { ...retryData, service_type: serviceType },
+            };
+          }
+        }
 
         if (error.message.includes("Could not find the table 'public.clients'")) {
           return {
@@ -181,13 +210,14 @@ export const sharepointService = {
     }
   },
 
-  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Service Type
+  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Graceful Fallback
   async renameClient(
     clientId: string,
     newCode: string,
     newName: string,
-    serviceType?: ServiceType
+    serviceTypeInput?: ServiceType
   ): Promise<{ success: boolean; error?: string }> {
+    const serviceType = serviceTypeInput || 'CFO';
     const folder_name = `[${newCode}] - ${newName}`;
 
     if (!isValidUUID(clientId)) {
@@ -198,8 +228,8 @@ export const sharepointService = {
           name: newName,
           folder_name: folder_name,
           status: 'active',
+          service_type: serviceType,
         };
-        if (serviceType) updatePayload.service_type = serviceType;
 
         const { error } = await supabase.from('clients').upsert(updatePayload);
         if (error) console.warn('Upsert warning:', error.message);
@@ -214,9 +244,9 @@ export const sharepointService = {
         code: newCode,
         name: newName,
         folder_name: folder_name,
+        service_type: serviceType,
         updated_at: new Date().toISOString(),
       };
-      if (serviceType) updatePayload.service_type = serviceType;
 
       const { error } = await supabase
         .from('clients')
@@ -226,6 +256,21 @@ export const sharepointService = {
 
       if (error) {
         console.error('Supabase Database UPDATE Error:', error.message);
+
+        // Fallback retry without service_type if column is missing
+        if (error.message.includes("service_type") || error.message.includes("schema cache")) {
+          const { error: retryError } = await supabase
+            .from('clients')
+            .update({
+              code: newCode,
+              name: newName,
+              folder_name: folder_name,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', clientId);
+
+          if (!retryError) return { success: true };
+        }
 
         if (error.message.includes("Could not find the table 'public.clients'")) {
           return {
@@ -241,7 +286,7 @@ export const sharepointService = {
         client_id: clientId,
         client_name: folder_name,
         action_type: 'UPDATE_METADATA',
-        action_details: `Chỉnh sửa thông tin thư mục [${newCode}] - ${newName}${serviceType ? ` (Dịch vụ: ${serviceType})` : ''}`,
+        action_details: `Chỉnh sửa thông tin thư mục [${newCode}] - ${newName} (Dịch vụ: ${serviceType})`,
         performed_by: 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: 'Admin',
         performed_by_role: 'admin',

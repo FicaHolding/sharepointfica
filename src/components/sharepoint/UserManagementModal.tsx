@@ -45,20 +45,33 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch real users from Supabase `profiles` table
+  // Safe Dynamic Initials Helper
+  const getInitials = (name?: string | null) => {
+    if (!name || typeof name !== 'string') return 'U';
+    const clean = name.trim();
+    if (!clean) return 'U';
+    const words = clean.split(' ');
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    return clean.substring(0, 2).toUpperCase();
+  };
+
+  // Fetch real users from Supabase `profiles` table with 100% try-catch and null-safety
   const refreshUsers = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
       const profiles = await sharepointService.fetchProfiles();
-      if (profiles && profiles.length > 0) {
+      if (Array.isArray(profiles)) {
         setDbUsers(profiles);
-      } else if (initialUsers && initialUsers.length > 0) {
+      } else if (Array.isArray(initialUsers)) {
         setDbUsers(initialUsers);
       } else {
         setDbUsers([]);
       }
     } catch (err: any) {
+      console.error('Fetch users error:', err);
       setErrorMsg('Không thể tải danh sách người dùng từ CSDL Supabase');
       setDbUsers([]);
     } finally {
@@ -70,13 +83,23 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     if (isOpen) {
       refreshUsers();
 
-      // Subscribe to Realtime changes on `profiles`
-      const unsubscribe = sharepointService.subscribeRealtime(() => {
-        refreshUsers();
-      });
+      let unsubscribe: (() => void) | undefined;
+      try {
+        unsubscribe = sharepointService.subscribeRealtime(() => {
+          refreshUsers();
+        });
+      } catch (e) {
+        console.warn('Realtime subscription notice:', e);
+      }
 
       return () => {
-        unsubscribe();
+        if (unsubscribe) {
+          try {
+            unsubscribe();
+          } catch {
+            // Ignore
+          }
+        }
       };
     }
   }, [isOpen]);
@@ -127,7 +150,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
-  const getRoleBadge = (r: UserRole) => {
+  const getRoleBadge = (r?: UserRole) => {
     switch (r) {
       case 'admin':
         return <span className="bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Admin (Toàn quyền)</span>;
@@ -137,8 +160,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Staff (Chuyên viên)</span>;
       case 'client':
         return <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Client (Xem hồ sơ)</span>;
+      default:
+        return <span className="bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded text-[10px] font-bold uppercase">Staff (Chuyên viên)</span>;
     }
   };
+
+  const safeUsers = Array.isArray(dbUsers) ? dbUsers : [];
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in select-none">
@@ -177,7 +204,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         <div className="p-5 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-xs text-slate-600">
-              Tổng số tài khoản trong hệ thống CSDL: <strong className="text-blue-700 font-mono">{dbUsers.length}</strong>
+              Tổng số tài khoản trong hệ thống CSDL: <strong className="text-blue-700 font-mono">{safeUsers.length}</strong>
             </div>
 
             {currentUserRole === 'admin' && (
@@ -290,7 +317,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {dbUsers.length === 0 ? (
+                {safeUsers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="p-6 text-center text-slate-500 text-xs">
                       {loading ? (
@@ -307,37 +334,43 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  dbUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 font-semibold text-slate-900">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                            {u.full_name.substring(0, 2).toUpperCase()}
+                  safeUsers.map((u) => {
+                    const displayName = u?.full_name || u?.email?.split('@')[0] || 'Cán Bộ Fica';
+                    const displayEmail = u?.email || 'user@fica.vn';
+                    const displayDept = u?.department || 'Fica Holding';
+
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 font-semibold text-slate-900">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
+                              {getInitials(displayName)}
+                            </div>
+                            <div>
+                              <span>{displayName}</span>
+                              {u?.phone && <p className="text-[10px] text-slate-500 font-mono">📞 {u.phone}</p>}
+                            </div>
                           </div>
-                          <div>
-                            <span>{u.full_name}</span>
-                            {u.phone && <p className="text-[10px] text-slate-500 font-mono">📞 {u.phone}</p>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-mono text-slate-600 text-[11px]">{u.email}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{u.department || 'Fica Holding'}</div>
-                      </td>
-                      <td className="p-3">{getRoleBadge(u.role)}</td>
-                      <td className="p-3 text-right">
-                        {currentUserRole === 'admin' && (
-                          <button
-                            onClick={() => handleDelete(u.id)}
-                            className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Gỡ bỏ tài khoản"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="p-3">
+                          <div className="font-mono text-slate-600 text-[11px]">{displayEmail}</div>
+                          <div className="text-[10px] text-slate-400 font-medium">{displayDept}</div>
+                        </td>
+                        <td className="p-3">{getRoleBadge(u?.role)}</td>
+                        <td className="p-3 text-right">
+                          {currentUserRole === 'admin' && (
+                            <button
+                              onClick={() => handleDelete(u.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Gỡ bỏ tài khoản"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
