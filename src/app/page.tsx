@@ -40,11 +40,11 @@ export default function SharePointHubPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Active Logged In User State (Valid UUID & Dynamic metadata)
+  // Active Logged In User State (Dynamic Persistence)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'a1111111-1111-4111-8111-111111111111',
     email: 'fica.holding@gmail.com',
-    full_name: 'Nguyễn Văn Nam',
+    full_name: 'Cán Bộ Fica Holding',
     role: 'admin',
     department: 'Ban Giám Đốc Fica Holding',
   });
@@ -128,10 +128,25 @@ export default function SharePointHubPage() {
     },
   ]);
 
-  // Load Real Supabase Database Clients & Auth Session on Mount
+  // Load Real Supabase Database Clients & User Profile on Mount
   useEffect(() => {
     async function initData() {
-      // 1. Fetch Auth Session
+      // 1. Check LocalStorage Profile Persistence First
+      if (typeof window !== 'undefined') {
+        const storedProfile = localStorage.getItem('fica_user_profile');
+        if (storedProfile) {
+          try {
+            const parsed = JSON.parse(storedProfile);
+            if (parsed && parsed.full_name) {
+              setCurrentUser((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      // 2. Fetch Auth Session & DB Profile
       try {
         const {
           data: { session },
@@ -142,19 +157,35 @@ export default function SharePointHubPage() {
           const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
           const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
 
-          setCurrentUser({
+          // Try fetching from `profiles` table
+          const { data: dbProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          const finalName = dbProfile?.full_name || metaName;
+          const finalDept = dbProfile?.department || metaDept;
+
+          const updatedUser: UserProfile = {
             id: session.user.id,
             email: userEmail,
-            full_name: metaName,
+            full_name: finalName,
             role: metaRole,
-            department: metaDept,
-          });
+            department: finalDept,
+          };
+
+          setCurrentUser(updatedUser);
+
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_user_profile', JSON.stringify(updatedUser));
+          }
         }
       } catch {
-        // Fallback demo active session
+        // Keep active session fallback
       }
 
-      // 2. Fetch Clients from Supabase DB
+      // 3. Fetch Clients from Supabase DB
       try {
         const dbClients = await sharepointService.fetchClients();
         if (dbClients && dbClients.length > 0) {
@@ -167,7 +198,7 @@ export default function SharePointHubPage() {
 
     initData();
 
-    // 3. Subscribe to Realtime DB updates
+    // 4. Subscribe to Realtime DB updates
     const unsubscribe = sharepointService.subscribeRealtime(async () => {
       const refreshedClients = await sharepointService.fetchClients();
       if (refreshedClients && refreshedClients.length > 0) {
@@ -746,7 +777,13 @@ export default function SharePointHubPage() {
         currentUser={currentUser}
         searchQuery={globalSearchQuery}
         onSearchChange={setGlobalSearchQuery}
-        onRoleSwitch={(r) => setCurrentUser({ ...currentUser, role: r })}
+        onRoleSwitch={(r) => {
+          const updated = { ...currentUser, role: r };
+          setCurrentUser(updated);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_user_profile', JSON.stringify(updated));
+          }
+        }}
         onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
         onOpenProfile={() => setIsUserProfileModalOpen(true)}
       />
@@ -983,7 +1020,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | Dynamic User Profile Enabled
+              Next.js 15 App Router | Supabase Realtime Storage | Dynamic User Profile Active
             </div>
           </footer>
         </main>
@@ -1035,8 +1072,13 @@ export default function SharePointHubPage() {
         isOpen={isUserProfileModalOpen}
         onClose={() => setIsUserProfileModalOpen(false)}
         onUpdateProfile={(updated) => {
-          setCurrentUser((prev) => ({ ...prev, ...updated }));
-          addToast('success', 'Đã cập nhật Hồ sơ cá nhân!');
+          const newProfile = { ...currentUser, ...updated };
+          setCurrentUser(newProfile);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_user_profile', JSON.stringify(newProfile));
+          }
+          addToast('success', 'Đã lưu vĩnh viễn Hồ sơ cá nhân!');
+          router.refresh();
         }}
       />
 
