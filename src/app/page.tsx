@@ -17,6 +17,10 @@ import { DetailsPane } from '@/components/sharepoint/DetailsPane';
 import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
 import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
 import { UserManagementModal } from '@/components/sharepoint/UserManagementModal';
+import { RenameClientModal } from '@/components/sharepoint/RenameClientModal';
+import { DeleteClientModal } from '@/components/sharepoint/DeleteClientModal';
+import { ContextMenu, ContextMenuPosition } from '@/components/sharepoint/ContextMenu';
+import { ToastContainer, ToastMessage } from '@/components/sharepoint/ToastContainer';
 import {
   UserProfile,
   ClientFolder,
@@ -33,7 +37,7 @@ import { createClient } from '@/utils/supabase/client';
 export default function SharePointHubPage() {
   const supabase = createClient();
 
-  // Active Logged In User State (Dynamic Supabase Session fallback)
+  // Active Logged In User State
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'usr-1',
     email: 'fica.holding@gmail.com',
@@ -42,7 +46,7 @@ export default function SharePointHubPage() {
     department: 'Ban Giám Đốc Fica Holding',
   });
 
-  // User Management State (Real profiles list)
+  // User Management State
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([
     {
       id: 'usr-1',
@@ -66,6 +70,17 @@ export default function SharePointHubPage() {
       department: 'Phòng Tư Vấn Tài Chính CFO',
     },
   ]);
+
+  // Toast Notifications State
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (type: 'success' | 'error' | 'info', title: string, message?: string) => {
+    const id = `toast-${Date.now()}`;
+    setToasts((prev) => [...prev, { id, type, title, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
 
   // Check Supabase Active Auth Session on Load
   useEffect(() => {
@@ -123,6 +138,9 @@ export default function SharePointHubPage() {
   const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
   const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
   const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
+  const [selectedClientForRename, setSelectedClientForRename] = useState<ClientFolder | null>(null);
+  const [selectedClientForDelete, setSelectedClientForDelete] = useState<ClientFolder | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
   const [detailsItem, setDetailsItem] = useState<{
@@ -335,6 +353,49 @@ export default function SharePointHubPage() {
     setAuditLogs([newLog, ...auditLogs]);
   };
 
+  // RENAME FOLDER HANDLER
+  const handleRenameClient = (clientId: string, newCode: string, newName: string) => {
+    const folder_name = `[${newCode}] - ${newName}`;
+    setClients(
+      clients.map((c) =>
+        c.id === clientId
+          ? {
+              ...c,
+              code: newCode,
+              name: newName,
+              folder_name,
+              updated_at: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    if (selectedClient?.id === clientId) {
+      setSelectedClient((prev) => (prev ? { ...prev, code: newCode, name: newName, folder_name } : null));
+    }
+    pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành [${newCode}] - ${newName}`, undefined, folder_name);
+    addToast('success', 'Đổi tên thư mục thành công!', `Tên mới: ${folder_name}`);
+  };
+
+  // DELETE FOLDER HANDLER (Recycle Bin vs Permanent)
+  const handleConfirmDeleteClient = (clientId: string, mode: 'recycle' | 'permanent') => {
+    const target = clients.find((c) => c.id === clientId);
+    if (!target) return;
+
+    if (mode === 'recycle') {
+      handleArchiveClient(target);
+      addToast('info', 'Đã chuyển hồ sơ vào Thùng rác (Archive)', `Hồ sơ ${target.folder_name} hiện ở dạng Read-Only.`);
+    } else {
+      setClients(clients.filter((c) => c.id !== clientId));
+      setFiles(files.filter((f) => f.client_id !== clientId));
+      if (selectedClient?.id === clientId) {
+        setSelectedClient(null);
+        setSelectedSubFolder(null);
+      }
+      pushAuditLog('DELETE_FILE', `Xóa vĩnh viễn thư mục khách hàng ${target.folder_name}`, undefined, target.folder_name);
+      addToast('error', 'Đã xóa vĩnh viễn thư mục!', `Đã xóa hoàn toàn dữ liệu của ${target.folder_name}`);
+    }
+  };
+
   // Add User Handler for User Management
   const handleAddUser = (newUser: Omit<UserProfile, 'id'>) => {
     const created: UserProfile = {
@@ -343,10 +404,12 @@ export default function SharePointHubPage() {
     };
     setSystemUsers([...systemUsers, created]);
     pushAuditLog('CREATE_CLIENT', `Thêm tài khoản người dùng mới ${newUser.full_name} (${newUser.email}) - Role: ${newUser.role}`);
+    addToast('success', 'Tạo tài khoản người dùng mới thành công!', `Email: ${newUser.email}`);
   };
 
   const handleDeleteUser = (userId: string) => {
     setSystemUsers(systemUsers.filter((u) => u.id !== userId));
+    addToast('info', 'Đã gỡ bỏ tài khoản người dùng.');
   };
 
   // Handle Client Creation
@@ -371,6 +434,7 @@ export default function SharePointHubPage() {
     setSelectedSubFolder(null);
 
     pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} với 4 subfolders`, undefined, folder_name);
+    addToast('success', 'Tạo Khách hàng mới thành công!', `Folder: ${folder_name}`);
   };
 
   // Archive / Restore Client
@@ -396,6 +460,7 @@ export default function SharePointHubPage() {
       setSelectedClient({ ...selectedClient, status: 'active' });
     }
     pushAuditLog('RESTORE_CLIENT', `Khôi phục hồ sơ sang trạng thái Active hoạt động`, undefined, client.folder_name);
+    addToast('success', 'Đã khôi phục trạng thái Active!', `Folder: ${client.folder_name}`);
   };
 
   // Upload File
@@ -437,6 +502,7 @@ export default function SharePointHubPage() {
       `Tải lên file ${data.name} (Năm ${data.fiscalYear}, Dịch vụ ${data.serviceType})`,
       data.name
     );
+    addToast('success', 'Tải lên tài liệu thành công!', `File: ${data.name}`);
   };
 
   // Delete single file
@@ -445,6 +511,7 @@ export default function SharePointHubPage() {
     setFiles(files.filter((f) => f.id !== fileId));
     if (targetFile) {
       pushAuditLog('DELETE_FILE', `Đã xóa vĩnh viễn file ${targetFile.name}`, targetFile.name);
+      addToast('info', 'Đã xóa tài liệu', targetFile.name);
     }
   };
 
@@ -459,11 +526,12 @@ export default function SharePointHubPage() {
       )
     );
     pushAuditLog('ARCHIVE_CLIENT', `Archive hàng loạt ${selectedClientIds.length} khách hàng đã chọn`);
+    addToast('info', `Đã Archive ${selectedClientIds.length} thư mục khách hàng!`);
     setSelectedClientIds([]);
   };
 
   const handleBulkDownloadZip = () => {
-    alert(`Đang nén và tải xuống file ZIP gồm ${selectedFileIds.length || selectedClientIds.length} mục đã chọn!`);
+    addToast('success', 'Đang tạo file ZIP...', `Tải xuống ${selectedFileIds.length || selectedClientIds.length} mục đã chọn.`);
     pushAuditLog('DOWNLOAD_FILE', `Tải xuống nén ZIP hàng loạt mục đã chọn`);
   };
 
@@ -471,11 +539,13 @@ export default function SharePointHubPage() {
     if (selectedFileIds.length > 0) {
       setFiles(files.filter((f) => !selectedFileIds.includes(f.id)));
       pushAuditLog('DELETE_FILE', `Xóa hàng loạt ${selectedFileIds.length} file tài liệu`);
+      addToast('error', `Đã xóa ${selectedFileIds.length} file tài liệu!`);
       setSelectedFileIds([]);
     }
     if (selectedClientIds.length > 0) {
       setClients(clients.filter((c) => !selectedClientIds.includes(c.id)));
       pushAuditLog('DELETE_FILE', `Xóa hàng loạt ${selectedClientIds.length} thư mục khách hàng`);
+      addToast('error', `Đã xóa ${selectedClientIds.length} thư mục khách hàng!`);
       setSelectedClientIds([]);
     }
   };
@@ -502,6 +572,7 @@ export default function SharePointHubPage() {
       })
     );
     pushAuditLog('UPDATE_METADATA', `Cập nhật Metadata hàng loạt cho ${selectedFileIds.length} file`);
+    addToast('success', 'Đã cập nhật Metadata hàng loạt!', `${selectedFileIds.length} file đã áp dụng.`);
     setSelectedFileIds([]);
   };
 
@@ -530,7 +601,7 @@ export default function SharePointHubPage() {
           tags: ['Kéo thả', 'Dropzone'],
         });
       } else {
-        alert('Vui lòng mở một Thư mục Khách hàng trước khi thả File!');
+        addToast('error', 'Vui lòng mở một Thư mục Khách hàng trước khi thả File!');
       }
     }
   };
@@ -602,6 +673,9 @@ export default function SharePointHubPage() {
       onDrop={handleDrop}
       className="min-h-screen bg-slate-900 flex flex-col font-sans antialiased select-none relative"
     >
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
+
       {/* Drag & Drop Visual Dropzone Overlay */}
       {isDraggingOver && (
         <div className="absolute inset-0 z-50 bg-blue-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white border-4 border-dashed border-blue-400 m-4 rounded-3xl animate-fade-in pointer-events-none">
@@ -788,12 +862,15 @@ export default function SharePointHubPage() {
                   setIsDetailsPaneOpen(true);
                 }}
                 onDownloadFile={(f) => {
-                  alert(`Đang tải file: ${f.name}`);
+                  addToast('info', 'Đang tải tài liệu...', f.name);
                   pushAuditLog('DOWNLOAD_FILE', `Tải file ${f.name} về máy`, f.name);
                 }}
                 onArchiveClient={handleArchiveClient}
                 onRestoreClient={handleRestoreClient}
                 onDeleteFile={handleDeleteFile}
+                onOpenContextMenu={(pos) => setContextMenuPos(pos)}
+                onRenameClientModal={(c) => setSelectedClientForRename(c)}
+                onDeleteClientModal={(c) => setSelectedClientForDelete(c)}
                 isReadOnly={isReadOnly}
               />
             ) : (
@@ -829,11 +906,14 @@ export default function SharePointHubPage() {
                   setIsDetailsPaneOpen(true);
                 }}
                 onDownloadFile={(f) => {
-                  alert(`Đang tải file: ${f.name}`);
+                  addToast('info', 'Đang tải tài liệu...', f.name);
                   pushAuditLog('DOWNLOAD_FILE', `Tải file ${f.name} về máy`, f.name);
                 }}
                 onArchiveClient={handleArchiveClient}
                 onRestoreClient={handleRestoreClient}
+                onOpenContextMenu={(pos) => setContextMenuPos(pos)}
+                onRenameClientModal={(c) => setSelectedClientForRename(c)}
+                onDeleteClientModal={(c) => setSelectedClientForDelete(c)}
                 isReadOnly={isReadOnly}
               />
             )}
@@ -846,7 +926,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | User Management RBAC
+              Next.js 15 App Router | Supabase Realtime Storage | Folder Actions Active
             </div>
           </footer>
         </main>
@@ -867,7 +947,47 @@ export default function SharePointHubPage() {
         isReadOnly={isReadOnly}
       />
 
-      {/* Modals, Drawers & Slide-over Panes */}
+      {/* Context Menu Popup (Right-Click & Positioned) */}
+      <ContextMenu
+        menuState={contextMenuPos}
+        onClose={() => setContextMenuPos(null)}
+        onOpenClient={(c) => {
+          setSelectedClient(c);
+          setSelectedSubFolder(null);
+        }}
+        onOpenSubFolder={(sf) => setSelectedSubFolder(sf)}
+        onRenameClient={(c) => setSelectedClientForRename(c)}
+        onArchiveClient={handleArchiveClient}
+        onRestoreClient={handleRestoreClient}
+        onDeleteClient={(c) => setSelectedClientForDelete(c)}
+        onOpenDetails={(item) => {
+          setDetailsItem(item);
+          setIsDetailsPaneOpen(true);
+        }}
+        onPreviewFile={(f) => setPreviewFile(f)}
+        onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
+        onDownloadFile={(f) => addToast('info', 'Đang tải file...', f.name)}
+        onDeleteFile={handleDeleteFile}
+        userRole={currentUser.role}
+        isReadOnly={isReadOnly}
+      />
+
+      {/* Modals & Slide-over Panes */}
+      <RenameClientModal
+        client={selectedClientForRename}
+        isOpen={!!selectedClientForRename}
+        onClose={() => setSelectedClientForRename(null)}
+        onRename={handleRenameClient}
+      />
+
+      <DeleteClientModal
+        client={selectedClientForDelete}
+        isOpen={!!selectedClientForDelete}
+        onClose={() => setSelectedClientForDelete(null)}
+        onConfirmDelete={handleConfirmDeleteClient}
+        userRole={currentUser.role}
+      />
+
       <UserManagementModal
         isOpen={isUserManagementModalOpen}
         onClose={() => setIsUserManagementModalOpen(false)}
@@ -917,7 +1037,7 @@ export default function SharePointHubPage() {
         file={previewFile}
         isOpen={!!previewFile}
         onClose={() => setPreviewFile(null)}
-        onDownload={(f) => alert(`Đang tải file: ${f.name}`)}
+        onDownload={(f) => addToast('info', 'Đang tải file...', f.name)}
       />
 
       <DetailsPane
@@ -928,7 +1048,7 @@ export default function SharePointHubPage() {
         selectedFile={detailsItem.file || null}
         userRole={currentUser.role}
         onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
-        onDownloadFile={(f) => alert(`Đang tải file: ${f.name}`)}
+        onDownloadFile={(f) => addToast('info', 'Đang tải file...', f.name)}
       />
 
       <BulkMetadataModal
@@ -942,9 +1062,9 @@ export default function SharePointHubPage() {
         file={selectedFileForVersionHistory}
         isOpen={!!selectedFileForVersionHistory}
         onClose={() => setSelectedFileForVersionHistory(null)}
-        onDownloadVersion={(v) => alert(`Tải xuống phiên bản v${v.version_number}: ${v.file_name}`)}
+        onDownloadVersion={(v) => addToast('info', `Tải v${v.version_number}`, v.file_name)}
         onRestoreVersion={(v) => {
-          alert(`Đã khôi phục phiên bản v${v.version_number} thành bản chính!`);
+          addToast('success', `Đã khôi phục phiên bản v${v.version_number}!`);
           pushAuditLog('RESTORE_VERSION', `Khôi phục phiên bản v${v.version_number} làm bản chính`, v.file_name);
           setSelectedFileForVersionHistory(null);
         }}

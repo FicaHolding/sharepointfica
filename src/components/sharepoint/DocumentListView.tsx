@@ -21,8 +21,10 @@ import {
   FolderOpen,
   Eye,
   Info,
+  Edit3,
 } from 'lucide-react';
 import { ClientFolder, FolderItem, DocumentFile, FileStatus } from '@/types/sharepoint';
+import { ContextMenuPosition } from './ContextMenu';
 
 interface DocumentListViewProps {
   clients: ClientFolder[];
@@ -44,6 +46,9 @@ interface DocumentListViewProps {
   onArchiveClient: (client: ClientFolder) => void;
   onRestoreClient: (client: ClientFolder) => void;
   onDeleteFile: (fileId: string) => void;
+  onOpenContextMenu: (pos: ContextMenuPosition) => void;
+  onRenameClientModal: (client: ClientFolder) => void;
+  onDeleteClientModal: (client: ClientFolder) => void;
   isReadOnly: boolean;
 }
 
@@ -67,6 +72,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   onArchiveClient,
   onRestoreClient,
   onDeleteFile,
+  onOpenContextMenu,
+  onRenameClientModal,
+  onDeleteClientModal,
   isReadOnly,
 }) => {
   const [activeMenuId, setActiveMenuId] = React.useState<string | null>(null);
@@ -172,7 +180,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
 
         {/* Table Body */}
         <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-          {/* LEVEL 1: Render Root Client Folders */}
+          {/* LEVEL 1: Render Root Client Folders (With Right-Click Context Menu) */}
           {isFolderView &&
             clients.map((client) => {
               const isSelected = selectedClientIds.includes(client.id);
@@ -180,6 +188,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 <tr
                   key={client.id}
                   onClick={() => onSelectClient(client)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onOpenContextMenu({ x: e.clientX, y: e.clientY, client });
+                  }}
                   className={`hover:bg-blue-50/60 cursor-pointer transition-colors ${
                     isSelected ? 'bg-blue-50/90 font-bold' : client.status === 'archived' ? 'bg-amber-50/30' : ''
                   }`}
@@ -238,7 +250,18 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       {activeMenuId === client.id && (
-                        <div className="absolute right-0 mt-1 w-44 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
+                        <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
+                          <button
+                            onClick={() => {
+                              onRenameClientModal(client);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Đổi tên (Rename)</span>
+                          </button>
+
                           <button
                             onClick={() => {
                               onSelectClient(client);
@@ -258,7 +281,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
                             <Info className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Xem chi tiết Info</span>
+                            <span>Xem chi tiết Metadata</span>
                           </button>
 
                           {client.status === 'active' ? (
@@ -267,7 +290,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                                 onArchiveClient(client);
                                 setActiveMenuId(null);
                               }}
-                              className="w-full px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 flex items-center space-x-2 border-t border-slate-100"
+                              className="w-full px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 flex items-center space-x-2"
                             >
                               <Archive className="w-3.5 h-3.5 text-amber-600" />
                               <span>Archive Hồ sơ</span>
@@ -278,12 +301,23 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                                 onRestoreClient(client);
                                 setActiveMenuId(null);
                               }}
-                              className="w-full px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2 border-t border-slate-100"
+                              className="w-full px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2"
                             >
                               <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Restore Hồ sơ</span>
                             </button>
                           )}
+
+                          <button
+                            onClick={() => {
+                              onDeleteClientModal(client);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 border-t border-slate-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <span>Xóa thư mục</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -298,6 +332,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               <tr
                 key={sf.id}
                 onClick={() => onSelectSubFolder(sf)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onOpenContextMenu({ x: e.clientX, y: e.clientY, subFolder: sf });
+                }}
                 className="hover:bg-blue-50/60 cursor-pointer transition-colors"
               >
                 <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -343,7 +381,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               </tr>
             ))}
 
-          {/* LEVEL 3: Render Document Files (With Double-Click Preview) */}
+          {/* LEVEL 3: Render Document Files (Right Click & Double Click) */}
           {(isFileView || (!isFolderView && !isSubFolderView)) &&
             files.map((file) => {
               const isSelected = selectedFileIds.includes(file.id);
@@ -351,6 +389,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 <tr
                   key={file.id}
                   onDoubleClick={() => onPreviewFile(file)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onOpenContextMenu({ x: e.clientX, y: e.clientY, file });
+                  }}
                   className={`hover:bg-slate-50 transition-colors cursor-pointer ${
                     isSelected ? 'bg-blue-50/90 font-bold' : ''
                   }`}

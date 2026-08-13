@@ -13,8 +13,11 @@ import {
   Tag,
   Eye,
   Info,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { ClientFolder, FolderItem, DocumentFile } from '@/types/sharepoint';
+import { ContextMenuPosition } from './ContextMenu';
 
 interface DocumentGridViewProps {
   clients: ClientFolder[];
@@ -34,6 +37,9 @@ interface DocumentGridViewProps {
   onDownloadFile: (file: DocumentFile) => void;
   onArchiveClient: (client: ClientFolder) => void;
   onRestoreClient: (client: ClientFolder) => void;
+  onOpenContextMenu: (pos: ContextMenuPosition) => void;
+  onRenameClientModal: (client: ClientFolder) => void;
+  onDeleteClientModal: (client: ClientFolder) => void;
   isReadOnly: boolean;
 }
 
@@ -55,6 +61,9 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
   onDownloadFile,
   onArchiveClient,
   onRestoreClient,
+  onOpenContextMenu,
+  onRenameClientModal,
+  onDeleteClientModal,
   isReadOnly,
 }) => {
   const isFolderView = !currentClient;
@@ -86,7 +95,7 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
 
   return (
     <div className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 select-none">
-      {/* Root Client Folders in Grid */}
+      {/* Root Client Folders in Grid (With Right Click) */}
       {isFolderView &&
         clients.map((client) => {
           const isSelected = selectedClientIds.includes(client.id);
@@ -94,6 +103,10 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
             <div
               key={client.id}
               onClick={() => onSelectClient(client)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onOpenContextMenu({ x: e.clientX, y: e.clientY, client });
+              }}
               className={`group bg-white border rounded-xl p-4 shadow-xs hover:shadow-md transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
                 isSelected
                   ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/20'
@@ -136,16 +149,31 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                 <span>{client.total_files_count || 4} thư mục con</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenDetailsPane({ client });
-                  }}
-                  className="p-1 hover:bg-slate-100 rounded text-slate-600"
-                  title="Thông tin chi tiết"
-                >
-                  <Info className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => onRenameClientModal(client)}
+                    className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-indigo-600"
+                    title="Đổi tên thư mục"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => onOpenDetailsPane({ client })}
+                    className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-blue-600"
+                    title="Thông tin chi tiết"
+                  >
+                    <Info className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => onDeleteClientModal(client)}
+                    className="p-1.5 hover:bg-red-50 rounded text-slate-600 hover:text-red-600"
+                    title="Xóa thư mục"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -157,6 +185,10 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
           <div
             key={sf.id}
             onClick={() => onSelectSubFolder(sf)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onOpenContextMenu({ x: e.clientX, y: e.clientY, subFolder: sf });
+            }}
             className="group bg-white border border-slate-200 rounded-xl p-4 shadow-xs hover:shadow-md hover:border-blue-400 transition-all cursor-pointer flex flex-col justify-between"
           >
             <div>
@@ -193,6 +225,10 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
             <div
               key={file.id}
               onDoubleClick={() => onPreviewFile(file)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onOpenContextMenu({ x: e.clientX, y: e.clientY, file });
+              }}
               className={`group bg-white border rounded-xl p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between cursor-pointer ${
                 isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/20' : 'border-slate-200 hover:border-blue-400'
               }`}

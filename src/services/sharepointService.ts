@@ -53,6 +53,64 @@ export const sharepointService = {
     }
   },
 
+  // Rename Client Folder
+  async renameClient(clientId: string, newCode: string, newName: string): Promise<boolean> {
+    const folder_name = `[${newCode}] - ${newName}`;
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({ code: newCode, name: newName, folder_name, updated_at: new Date().toISOString() })
+        .eq('id', clientId);
+
+      if (error) {
+        console.warn('Error renaming client in Supabase:', error.message);
+        return false;
+      }
+
+      await this.logAudit({
+        client_id: clientId,
+        client_name: folder_name,
+        action_type: 'UPDATE_METADATA',
+        action_details: `Đổi tên thư mục thành [${newCode}] - ${newName}`,
+        performed_by: 'usr-1',
+        performed_by_name: 'Admin',
+        performed_by_role: 'admin',
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // Delete Client Folder (Permanent or Soft Archive)
+  async deleteClient(clientId: string, mode: 'recycle' | 'permanent'): Promise<boolean> {
+    try {
+      if (mode === 'recycle') {
+        return await this.updateClientStatus(clientId, 'archived');
+      }
+
+      const { error } = await supabase.from('clients').delete().eq('id', clientId);
+      if (error) {
+        console.warn('Error deleting client from Supabase:', error.message);
+        return false;
+      }
+
+      await this.logAudit({
+        client_id: clientId,
+        action_type: 'DELETE_FILE',
+        action_details: `Xóa vĩnh viễn thư mục khách hàng và toàn bộ dữ liệu con`,
+        performed_by: 'usr-1',
+        performed_by_name: 'Admin',
+        performed_by_role: 'admin',
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   // Archive / Restore client (Locks or unlocks editing)
   async updateClientStatus(clientId: string, status: 'active' | 'archived', performedByName = 'Admin'): Promise<boolean> {
     try {
