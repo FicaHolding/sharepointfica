@@ -23,8 +23,11 @@ import {
   Activity,
   HardDrive,
   CheckCircle,
+  Search,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react';
-import { UserProfile, UserRole } from '@/types/sharepoint';
+import { UserProfile, UserRole, DocumentFile } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
 import { FicaLogo } from '@/components/sharepoint/FicaLogo';
 import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
@@ -38,6 +41,8 @@ interface UserManagementModalProps {
   currentUserRole: UserRole;
   companyLogoUrl?: string | null;
   onUpdateLogo?: (newUrl: string | null) => void;
+  allFiles?: DocumentFile[];
+  onRefreshFiles?: () => void;
 }
 
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({
@@ -49,6 +54,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   currentUserRole,
   companyLogoUrl,
   onUpdateLogo,
+  allFiles = [],
+  onRefreshFiles,
 }) => {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'users' | 'logo' | 'health'>('users');
   const [dbUsers, setDbUsers] = useState<UserProfile[]>([]);
@@ -65,7 +72,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [logoError, setLogoError] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  // Health check state
+  // Health check & Audit state
   const [healthStatus, setHealthStatus] = useState<{
     checking: boolean;
     exists: boolean;
@@ -75,6 +82,21 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     exists: true,
     message: 'Storage Bucket Engine Ready',
   });
+
+  const [auditing, setAuditing] = useState(false);
+  const [auditReport, setAuditReport] = useState<{
+    total: number;
+    verifiedCount: number;
+    phantomCount: number;
+    phantomFiles: DocumentFile[];
+  }>({
+    total: 0,
+    verifiedCount: 0,
+    phantomCount: 0,
+    phantomFiles: [],
+  });
+
+  const [uploadingPhantomId, setUploadingPhantomId] = useState<string | null>(null);
 
   useEffect(() => {
     setLogoPreview(companyLogoUrl || null);
@@ -122,6 +144,43 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       exists: res.exists,
       message: res.message,
     });
+  };
+
+  const handleRunPhantomAudit = async () => {
+    setAuditing(true);
+    try {
+      const currentFiles = allFiles.length > 0 ? allFiles : await sharepointService.fetchFiles();
+      const res = await sharepointService.auditSystemPhantomFiles(currentFiles);
+      setAuditReport(res);
+    } catch (err) {
+      console.error('Audit exception:', err);
+    } finally {
+      setAuditing(false);
+    }
+  };
+
+  const handleReplacePhantomFile = async (e: React.ChangeEvent<HTMLInputElement>, fileItem: DocumentFile) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      setUploadingPhantomId(fileItem.id);
+
+      const res = await sharepointService.replacePhantomFile(
+        selectedFile,
+        fileItem.id,
+        fileItem.storage_path,
+        'Admin'
+      );
+
+      setUploadingPhantomId(null);
+
+      if (res.success) {
+        alert(`Đã bổ sung thành công file vật lý cho tài liệu: ${fileItem.name}!`);
+        await handleRunPhantomAudit();
+        onRefreshFiles?.();
+      } else {
+        alert(`Lỗi upload file vật lý: ${res.error}`);
+      }
+    }
   };
 
   useEffect(() => {
@@ -271,7 +330,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm">Cài Đặt Hệ Thống & Quản Lý RBAC</h3>
-              <p className="text-[11px] text-slate-400 font-mono">Supabase Authentication & Automated Storage Health Check</p>
+              <p className="text-[11px] text-slate-400 font-mono">Supabase Authentication & Phantom File Reconciliation</p>
             </div>
           </div>
 
@@ -313,6 +372,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             onClick={() => {
               setActiveSettingsTab('health');
               handleRunHealthCheck();
+              handleRunPhantomAudit();
             }}
             className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 shrink-0 min-h-[40px] ${
               activeSettingsTab === 'health'
@@ -321,7 +381,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             }`}
           >
             <Database className="w-4 h-4 text-emerald-600" />
-            <span>Kiểm Tra Storage & Health</span>
+            <span>Kiểm Tra Storage & Rà Soát File</span>
           </button>
         </div>
 
@@ -573,69 +633,149 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           </div>
         )}
 
-        {/* Body Content Tab 3: Health Check & Automated Bucket Setup */}
+        {/* Body Content Tab 3: Health Check & Phantom Reconciliation Audit */}
         {activeSettingsTab === 'health' && (
           <div className="p-5 overflow-y-auto space-y-5 flex-1 text-xs text-slate-800">
             <div>
               <h4 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                 <Database className="w-5 h-5 text-emerald-600" />
-                <span>Kiểm Tra Sức Khỏe & Tự Động Khởi Tạo Storage Bucket</span>
+                <span>Kiểm Tra Storage & Rà Soát File Phantom Toàn Hệ Thống</span>
               </h4>
               <p className="text-slate-500 text-xs mt-1">
-                Tự động quét và duy trì trạng thái hoạt động của Supabase Storage Bucket <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">{SUPABASE_STORAGE_BUCKET}</code>.
+                Tự động quét toàn bộ tài liệu trong CSDL và đối chiếu file vật lý thực tế trên Supabase Private Storage <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">{SUPABASE_STORAGE_BUCKET}</code>.
               </p>
             </div>
 
-            <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 shadow-xs">
+            {/* Health Card */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className={`p-3 rounded-xl ${healthStatus.exists ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-400/30' : 'bg-amber-500/10 text-amber-600 border border-amber-400/30'}`}>
-                    <HardDrive className="w-6 h-6" />
+                  <div className={`p-2.5 rounded-xl ${healthStatus.exists ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-400/30' : 'bg-amber-500/10 text-amber-600 border border-amber-400/30'}`}>
+                    <HardDrive className="w-5 h-5" />
                   </div>
                   <div>
-                    <h5 className="font-bold text-sm text-slate-900">
-                      Bucket '{SUPABASE_STORAGE_BUCKET}'
+                    <h5 className="font-bold text-xs text-slate-900">
+                      Bucket '{SUPABASE_STORAGE_BUCKET}' Status
                     </h5>
                     <p className="text-[11px] text-slate-500 font-mono">
-                      {healthStatus.exists ? 'Private Mode • RLS Auth Policies Active • Max 50MB' : 'Đang chờ khởi tạo tự động...'}
+                      {healthStatus.exists ? 'Private Security Mode • RLS Authenticated Policies Active' : 'Đang chờ khởi tạo tự động...'}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  onClick={handleRunHealthCheck}
-                  disabled={healthStatus.checking}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-all shadow-xs min-h-[44px] disabled:opacity-50"
-                >
-                  {healthStatus.checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  <span>{healthStatus.checking ? 'Đang quét...' : '⚡ Khởi tạo / Quét Tự Động'}</span>
-                </button>
-              </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleRunHealthCheck}
+                    disabled={healthStatus.checking}
+                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold flex items-center space-x-1.5 transition-all text-xs min-h-[40px] disabled:opacity-50"
+                  >
+                    {healthStatus.checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    <span>Kiểm tra hạ tầng</span>
+                  </button>
 
-              <div className="p-3 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 flex items-center space-x-2">
-                {healthStatus.exists ? <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />}
-                <span>{healthStatus.message}</span>
+                  <button
+                    onClick={handleRunPhantomAudit}
+                    disabled={auditing}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-all text-xs min-h-[40px] disabled:opacity-50 shadow-xs"
+                  >
+                    {auditing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    <span>{auditing ? 'Đang đối soát...' : '🔎 Quét File Phantom'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-[11px] text-blue-900 space-y-2">
-              <h5 className="font-bold text-blue-800 flex items-center space-x-1.5 text-xs">
-                <Shield className="w-4 h-4 text-blue-600" />
-                <span>Cơ Chế Bảo Vệ Dữ Liệu Kép (Dual Storage Engine):</span>
-              </h5>
-              <p>
-                - Hệ thống tích hợp sẵn luồng lưu trữ kép: Tải trực tiếp lên <strong>Supabase Storage Cloud</strong> đồng thời tự động lưu bản sao bảo mật <strong>Persistent Local Cache</strong>.
-              </p>
-              <p>
-                - Đảm bảo <strong>100% không bị mất file</strong>, không vỡ layout và xem trước PDF mượt mà ngay cả khi môi trường mạng có độ trễ.
-              </p>
+            {/* Reconciliation Audit Summary Widgets */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="text-[11px] text-blue-700 font-bold">Tổng Record CSDL</div>
+                <div className="text-lg font-extrabold text-blue-900 font-mono mt-0.5">{auditReport.total || allFiles.length}</div>
+                <div className="text-[10px] text-blue-600 mt-0.5">Tài liệu trong Database</div>
+              </div>
+
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <div className="text-[11px] text-emerald-700 font-bold">File Vật Lý Chuẩn</div>
+                <div className="text-lg font-extrabold text-emerald-900 font-mono mt-0.5">{auditReport.verifiedCount}</div>
+                <div className="text-[10px] text-emerald-600 mt-0.5">Sẵn sàng xem/tải về</div>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border ${auditReport.phantomCount > 0 ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`}>
+                <div className={`text-[11px] font-bold ${auditReport.phantomCount > 0 ? 'text-amber-800' : 'text-slate-700'}`}>File Phantom (Cần bổ sung)</div>
+                <div className={`text-lg font-extrabold font-mono mt-0.5 ${auditReport.phantomCount > 0 ? 'text-amber-900' : 'text-slate-800'}`}>{auditReport.phantomCount}</div>
+                <div className={`text-[10px] ${auditReport.phantomCount > 0 ? 'text-amber-700 font-semibold' : 'text-slate-500'}`}>Metadata có, thiếu file gốc</div>
+              </div>
             </div>
+
+            {/* Phantom Files Table */}
+            {auditReport.phantomFiles.length > 0 && (
+              <div className="space-y-2">
+                <h5 className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span>Danh sách File Phantom Cần Bổ Sung File Vật Lý ({auditReport.phantomFiles.length} tài liệu):</span>
+                </h5>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-2.5">Tên Tài liệu</th>
+                        <th className="p-2.5">Dịch vụ</th>
+                        <th className="p-2.5">Ngày khởi tạo</th>
+                        <th className="p-2.5 text-right">Thao tác bổ sung</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 text-slate-800">
+                      {auditReport.phantomFiles.map((pf) => (
+                        <tr key={pf.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2.5 font-bold text-slate-900">
+                            <div className="flex items-center space-x-2">
+                              <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[220px]">{pf.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-2.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-800 font-bold border border-blue-200">
+                              {pf.service_type || 'CFO'}
+                            </span>
+                          </td>
+                          <td className="p-2.5 text-slate-500 font-mono text-[11px]">
+                            {new Date(pf.created_at).toLocaleDateString('vi-VN')}
+                          </td>
+                          <td className="p-2.5 text-right">
+                            <input
+                              type="file"
+                              id={`phantom-upload-${pf.id}`}
+                              className="hidden"
+                              disabled={uploadingPhantomId === pf.id}
+                              onChange={(e) => handleReplacePhantomFile(e, pf)}
+                            />
+                            <label
+                              htmlFor={`phantom-upload-${pf.id}`}
+                              className={`px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px] cursor-pointer inline-flex items-center space-x-1 min-h-[32px] ${
+                                uploadingPhantomId === pf.id ? 'opacity-50 pointer-events-none' : ''
+                              }`}
+                            >
+                              {uploadingPhantomId === pf.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="w-3.5 h-3.5" />
+                              )}
+                              <span>{uploadingPhantomId === pf.id ? 'Đang lưu...' : 'Bổ sung File'}</span>
+                            </label>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 text-xs">
-          <span className="text-slate-500 font-mono">Supabase Storage & Database Realtime Engine</span>
+          <span className="text-slate-500 font-mono">Supabase Storage Private Security & Verified 2-Phase Engine</span>
           <button
             onClick={onClose}
             className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors min-h-[44px]"

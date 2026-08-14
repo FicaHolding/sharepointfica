@@ -1391,6 +1391,8 @@ function SharePointContent() {
             addToast('info', 'Đã khôi phục về Logo FICA mặc định.');
           }
         }}
+        allFiles={files}
+        onRefreshFiles={() => router.refresh()}
       />
 
       <NewClientModal

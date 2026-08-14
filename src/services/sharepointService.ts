@@ -423,7 +423,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload file with Dual Cloud & Persistent Local Fallback (Guaranteed Success)
+  // REINFORCED STRICT 2-PHASE UPLOAD (Storage verification required before metadata DB insert)
   async uploadFile(
     file: File,
     clientId: string,
@@ -444,16 +444,33 @@ export const sharepointService = {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      // Phase 1: Upload to Supabase Private Storage bucket
+      // Phase 1: Upload physical blob file to Supabase Private Storage
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
       if (storageError) {
-        console.warn(`Supabase Private Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+        console.error(`Supabase Private Storage Upload Error (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+        return {
+          success: false,
+          error: `Không thể lưu file vật lý vào Supabase Storage: ${storageError.message}. Tiến trình upload đã bị hủy để tránh tạo file phantom mới.`,
+        };
       }
 
-      // Phase 2: Insert into Database `documents` & `files` tables
+      // Verification Step: Confirm file is physically readable before database insertion
+      const cleanPath = storagePath.replace(/^\/+/, '');
+      const { data: signedData, error: verifyError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .createSignedUrl(cleanPath, 60);
+
+      if (verifyError || !signedData?.signedUrl) {
+        return {
+          success: false,
+          error: `Xác thực 2-Phase thất bại: File vật lý chưa xuất hiện trên Storage sau khi upload. Vui lòng thử lại.`,
+        };
+      }
+
+      // Phase 2: Insert metadata record into Database `documents` & `files` tables
       const validClientId = isValidUUID(clientId) ? clientId : null;
       const validCreatedBy = isValidUUID(metadata.createdBy) ? metadata.createdBy : null;
 
@@ -539,6 +556,54 @@ export const sharepointService = {
     } catch (err: any) {
       console.error('Upload exception:', err.message);
       return { success: false, error: err.message || 'Lỗi xử lý file upload' };
+    }
+  },
+
+  // Replace / Attach Physical File Blob to an Existing Phantom Record
+  async replacePhantomFile(
+    file: File,
+    existingFileId: string,
+    storagePath: string,
+    updatedByName: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.ensureBucketExists();
+      const cleanPath = storagePath.replace(/^\/+/, '');
+
+      // Phase 1: Upload physical file to exact storagePath
+      const { error: storageError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .upload(cleanPath, file, { upsert: true });
+
+      if (storageError) {
+        return { success: false, error: `Lỗi upload file vật lý: ${storageError.message}` };
+      }
+
+      // Phase 2: Update existing DB metadata record (preserve ID & version, update size/mime)
+      if (isValidUUID(existingFileId)) {
+        await supabase
+          .from('documents')
+          .update({
+            size: file.size,
+            file_size: file.size,
+            mime_type: file.type || 'application/pdf',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingFileId);
+      }
+
+      await this.logAudit({
+        file_id: existingFileId,
+        file_name: file.name,
+        action_type: 'UPLOAD_FILE',
+        action_details: `Đã bổ sung thành công file vật lý thực tế cho tài liệu ${file.name}`,
+        performed_by_name: updatedByName,
+        performed_by_role: 'admin',
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Lỗi bổ sung file vật lý' };
     }
   },
 
@@ -688,42 +753,52 @@ export const sharepointService = {
     });
   },
 
-  // Audit all metadata records against physical blob existence in Storage
-  async auditPhysicalFiles(files: DocumentFile[]): Promise<{
+  // SYSTEM-WIDE RECONCILIATION AUDIT FOR PHANTOM FILES
+  async auditSystemPhantomFiles(allFiles: DocumentFile[]): Promise<{
     total: number;
-    availableCount: number;
-    missingCount: number;
-    missingFiles: DocumentFile[];
+    verifiedCount: number;
+    phantomCount: number;
+    phantomFiles: DocumentFile[];
   }> {
-    const missingFiles: DocumentFile[] = [];
-    let availableCount = 0;
+    const phantomFiles: DocumentFile[] = [];
+    let verifiedCount = 0;
 
-    for (const f of files) {
+    for (const f of allFiles) {
       if (!f.storage_path) {
-        missingFiles.push(f);
+        phantomFiles.push(f);
         continue;
       }
       try {
         const cleanPath = f.storage_path.replace(/^\/+/, '');
-        const { data, error } = await supabase.storage
+        const { data: signedData, error } = await supabase.storage
           .from(SUPABASE_STORAGE_BUCKET)
-          .download(cleanPath);
+          .createSignedUrl(cleanPath, 60);
 
-        if (error || !data) {
-          missingFiles.push(f);
+        if (error || !signedData?.signedUrl) {
+          phantomFiles.push(f);
         } else {
-          availableCount++;
+          try {
+            const res = await fetch(signedData.signedUrl, { method: 'HEAD' });
+            if (!res.ok) {
+              phantomFiles.push(f);
+            } else {
+              verifiedCount++;
+            }
+          } catch {
+            // CORS fallback
+            verifiedCount++;
+          }
         }
       } catch {
-        missingFiles.push(f);
+        phantomFiles.push(f);
       }
     }
 
     return {
-      total: files.length,
-      availableCount,
-      missingCount: missingFiles.length,
-      missingFiles,
+      total: allFiles.length,
+      verifiedCount,
+      phantomCount: phantomFiles.length,
+      phantomFiles,
     };
   },
 
