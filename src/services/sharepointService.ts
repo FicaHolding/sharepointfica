@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/client';
 import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile } from '@/types/sharepoint';
+import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 
 const supabase = createClient();
 
@@ -125,7 +126,6 @@ export const sharepointService = {
     const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
 
     try {
-      // 1. Direct INSERT into Supabase `clients` table with selected serviceType
       const { data, error } = await supabase
         .from('clients')
         .insert([
@@ -147,7 +147,6 @@ export const sharepointService = {
       if (error) {
         console.error('Supabase Database INSERT Error:', error.message);
 
-        // Fallback: If service_type column is missing in Supabase schema cache, retry insert without service_type in payload
         if (
           error.message.includes('service_type') ||
           error.message.includes('schema cache') ||
@@ -196,7 +195,6 @@ export const sharepointService = {
         return { success: false, error: error.message };
       }
 
-      // 2. Audit Trail Entry
       await this.logAudit({
         client_id: data.id,
         client_name: data.folder_name,
@@ -261,7 +259,6 @@ export const sharepointService = {
       if (error) {
         console.error('Supabase Database UPDATE Error:', error.message);
 
-        // Fallback retry without service_type if column is missing
         if (
           error.message.includes('service_type') ||
           error.message.includes('schema cache') ||
@@ -412,7 +409,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload file to Supabase Storage and register file record in DB
+  // Upload file to Supabase Storage using centralized bucket constant
   async uploadFile(
     file: File,
     clientId: string,
@@ -431,13 +428,13 @@ export const sharepointService = {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      // 1. Upload to Storage bucket
+      // 1. Upload to Storage bucket using centralized constant
       const { error: storageError } = await supabase.storage
-        .from('documents')
+        .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
       if (storageError) {
-        console.warn('Storage upload error:', storageError.message);
+        console.warn(`Supabase Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
       }
 
       const payloadDoc = {
@@ -465,7 +462,6 @@ export const sharepointService = {
 
       if (dbError) {
         console.warn('Database documents table insert notice:', dbError.message);
-        // Fallback insert into `files` table
         await supabase.from('files').insert([
           {
             id: newId,
@@ -517,8 +513,80 @@ export const sharepointService = {
       });
 
       return createdDoc;
-    } catch {
+    } catch (err: any) {
+      console.error('Upload exception:', err.message);
       return null;
+    }
+  },
+
+  // Centralized helper to get a working preview or download URL for a file using Signed URLs
+  async getFilePreviewOrDownloadUrl(storagePath: string): Promise<{ url: string | null; isSigned: boolean; error?: string }> {
+    try {
+      if (!storagePath) {
+        return { url: null, isSigned: false, error: 'Thiếu đường dẫn storage_path' };
+      }
+
+      const cleanPath = storagePath.replace(/^\/+/, '');
+
+      // 1. Try Signed URL (Works whether bucket is Private or Public)
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .createSignedUrl(cleanPath, 3600);
+
+      if (!signedError && signedData?.signedUrl) {
+        return { url: signedData.signedUrl, isSigned: true };
+      }
+
+      // 2. Fallback to Public URL
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(cleanPath);
+
+      if (publicData?.publicUrl) {
+        return { url: publicData.publicUrl, isSigned: false };
+      }
+
+      return {
+        url: null,
+        isSigned: false,
+        error: `Không tìm thấy file trong bucket '${SUPABASE_STORAGE_BUCKET}' (Path: ${cleanPath}).`,
+      };
+    } catch (err: any) {
+      console.warn('Storage URL fetch error:', err.message);
+      return { url: null, isSigned: false, error: err.message || 'Lỗi truy cập Supabase Storage' };
+    }
+  },
+
+  // Direct Blob download helper to prevent raw JSON errors
+  async downloadFileBlob(storagePath: string, fileName: string): Promise<boolean> {
+    try {
+      const cleanPath = storagePath.replace(/^\/+/, '');
+      const { data: blob, error } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .download(cleanPath);
+
+      if (error || !blob) {
+        console.warn('Direct blob download notice:', error?.message);
+        const signedRes = await this.getFilePreviewOrDownloadUrl(storagePath);
+        if (signedRes.url) {
+          window.open(signedRes.url, '_blank');
+          return true;
+        }
+        return false;
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      return true;
+    } catch (err: any) {
+      console.error('Download blob exception:', err.message);
+      return false;
     }
   },
 
@@ -555,16 +623,6 @@ export const sharepointService = {
       return data || [];
     } catch {
       return [];
-    }
-  },
-
-  // Download File public/signed URL
-  async getFileDownloadUrl(storagePath: string): Promise<string | null> {
-    try {
-      const { data } = supabase.storage.from('documents').getPublicUrl(storagePath);
-      return data?.publicUrl || null;
-    } catch {
-      return null;
     }
   },
 

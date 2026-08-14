@@ -16,10 +16,13 @@ import {
   CheckCircle2,
   Lock,
   Loader2,
+  AlertTriangle,
+  RefreshCcw,
 } from 'lucide-react';
 import { DocumentFile } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
+import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 
 interface FilePreviewModalProps {
   file: DocumentFile | null;
@@ -38,26 +41,56 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasStorageError, setHasStorageError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
-    if (file && isOpen) {
-      setLoading(true);
+    async function loadPreviewUrl() {
+      if (!file || !isOpen) return;
 
-      // Fetch public URL from Supabase Storage bucket 'documents'
-      if (file.storage_path) {
-        const { data } = supabase.storage.from('documents').getPublicUrl(file.storage_path);
-        if (data?.publicUrl) {
-          setFileUrl(data.publicUrl);
-        } else {
-          setFileUrl(`https://flcteenudjlmosooxtzh.supabase.co/storage/v1/object/public/documents/${file.storage_path}`);
-        }
-      } else {
+      setLoading(true);
+      setHasStorageError(false);
+      setErrorMessage(null);
+
+      if (!file.storage_path) {
         setFileUrl(null);
+        setLoading(false);
+        return;
       }
 
-      setLoading(false);
+      try {
+        // 1. Get Signed URL or Public URL
+        const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
+
+        if (res.url) {
+          // 2. Perform a lightweight HEAD fetch check to verify bucket existence
+          try {
+            const headCheck = await fetch(res.url, { method: 'HEAD' });
+            if (!headCheck.ok) {
+              // If status is 404 or 400, bucket or object doesn't exist
+              setHasStorageError(true);
+              setErrorMessage(`Supabase Storage trả về lỗi 404 (NoSuchBucket). Bucket '${SUPABASE_STORAGE_BUCKET}' chưa tồn tại hoặc bị sai đường dẫn.`);
+            } else {
+              setFileUrl(res.url);
+            }
+          } catch {
+            // CORS or offline check fallback: set url directly
+            setFileUrl(res.url);
+          }
+        } else {
+          setHasStorageError(true);
+          setErrorMessage(res.error || 'Không tìm thấy bucket hoặc đường dẫn file.');
+        }
+      } catch (err: any) {
+        setHasStorageError(true);
+        setErrorMessage(err.message || 'Lỗi nạp xem trước file từ Supabase Storage.');
+      } finally {
+        setLoading(false);
+      }
     }
+
+    loadPreviewUrl();
   }, [file, isOpen]);
 
   if (!isOpen || !file) return null;
@@ -74,27 +107,32 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const handleRealDownload = () => {
-    if (fileUrl) {
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = file.name;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const handleRealDownload = async () => {
+    if (!file) return;
+
+    if (file.storage_path) {
+      const success = await sharepointService.downloadFileBlob(file.storage_path, file.name);
+      if (!success && fileUrl) {
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = file.name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     }
     onDownload(file);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-fade-in">
-      <div className="w-full max-w-5xl h-[88vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 select-none animate-fade-in">
+      <div className="w-full max-w-5xl h-[90vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
         {/* Header Toolbar */}
-        <div className="h-14 px-5 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800">
+        <div className="h-14 px-4 sm:px-5 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800">
           {/* Left: File metadata */}
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-400/30">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-400/30 shrink-0">
               {isPdf ? (
                 <FileText className="w-5 h-5 text-red-400" />
               ) : isSpreadsheet ? (
@@ -105,21 +143,21 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 <FileText className="w-5 h-5 text-blue-400" />
               )}
             </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-100 flex items-center space-x-2">
-                <span className="truncate max-w-md">{file.name}</span>
-                <span className="bg-blue-600 text-white text-[10px] font-mono px-1.5 py-0.2 rounded font-bold">
+            <div className="min-w-0">
+              <h3 className="font-bold text-xs sm:text-sm text-slate-100 flex items-center space-x-2">
+                <span className="truncate max-w-[200px] sm:max-w-md">{file.name}</span>
+                <span className="bg-blue-600 text-white text-[10px] font-mono px-1.5 py-0.2 rounded font-bold shrink-0">
                   v{file.current_version || 1}
                 </span>
               </h3>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 font-mono truncate">
                 {formatFileSize(file.file_size)} • {file.service_type || 'CFO'} • Năm {file.fiscal_year || 2025}
               </p>
             </div>
           </div>
 
           {/* Middle: Zoom & View Controls */}
-          <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+          <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
               onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
@@ -146,13 +184,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
 
           {/* Right: Download & Close */}
-          <div className="flex items-center space-x-2">
-            {fileUrl && (
+          <div className="flex items-center space-x-2 shrink-0">
+            {fileUrl && !hasStorageError && (
               <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                 title="Mở tab mới"
               >
                 <ExternalLink className="w-4 h-4" />
@@ -161,15 +199,15 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
             <button
               onClick={handleRealDownload}
-              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
             >
               <Download className="w-4 h-4" />
-              <span>Tải file gốc</span>
+              <span className="hidden sm:inline">Tải file gốc</span>
             </button>
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             >
               <X className="w-5 h-5" />
             </button>
@@ -177,11 +215,46 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         </div>
 
         {/* Content Viewer Area */}
-        <div className="flex-1 bg-slate-950 p-4 overflow-auto flex items-center justify-center relative">
+        <div className="flex-1 bg-slate-950 p-3 sm:p-4 overflow-auto flex items-center justify-center relative">
           {loading ? (
-            <div className="flex flex-col items-center space-y-2 text-slate-400 text-xs">
+            <div className="flex flex-col items-center space-y-3 text-slate-400 text-xs">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <span>Đang tải xem trước từ Supabase Storage...</span>
+              <span>Đang kết nối Supabase Storage...</span>
+            </div>
+          ) : hasStorageError ? (
+            /* Friendly Vietnamese Error Banner when Bucket is missing or 404 */
+            <div className="text-center p-6 sm:p-8 bg-slate-900/90 rounded-2xl border border-amber-500/30 max-w-lg text-slate-300 text-xs space-y-4 shadow-2xl animate-in fade-in">
+              <div className="p-3 bg-amber-500/20 rounded-full w-14 h-14 mx-auto flex items-center justify-center text-amber-400 border border-amber-500/30">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="font-bold text-sm text-amber-300">Không thể xem trực tiếp file từ Storage</h4>
+                <p className="text-slate-400 text-[11px] font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-left">
+                  {errorMessage || "Lỗi: Bucket 'documents' chưa khởi tạo trên Supabase Storage."}
+                </p>
+              </div>
+
+              <div className="p-3 bg-blue-950/60 border border-blue-800/50 rounded-xl text-left text-[11px] space-y-1 text-blue-200">
+                <p className="font-bold text-blue-400">💡 Hướng dẫn xử lý cho Quản trị viên:</p>
+                <p>1. Mở **Supabase Dashboard → Storage → Buckets**.</p>
+                <p>2. Kiểm tra bucket có tên **<code className="text-blue-300 font-mono">documents</code>** đã được tạo hay chưa.</p>
+                <p>3. Đảm bảo đã thiết lập quyền **Public Access** hoặc cấp RLS policy cho bucket.</p>
+              </div>
+
+              <div className="flex items-center justify-center space-x-2 pt-2">
+                <button
+                  onClick={handleRealDownload}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-colors shadow-md text-xs min-h-[44px]"
+                >
+                  Thử Tải file xuống
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-colors text-xs min-h-[44px]"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           ) : isPdf && fileUrl ? (
             <iframe
@@ -216,7 +289,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               <p>Chế độ xem trực tiếp không hỗ trợ định dạng này. Vui lòng bấm "Tải file gốc" bên trên để xem chi tiết.</p>
               <button
                 onClick={handleRealDownload}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-colors"
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-colors min-h-[44px]"
               >
                 Tải xuống File ngay
               </button>
