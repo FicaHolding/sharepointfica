@@ -33,7 +33,7 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex justify-end z-50 animate-fade-in select-none">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex justify-end z-50 animate-fade-in select-none">
       <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-200">
         {/* Header */}
         <div className="p-4 bg-[#0F172A] text-white flex items-center justify-between border-b border-slate-800">
@@ -44,14 +44,14 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-5 flex-1 overflow-y-auto space-y-6 text-xs text-slate-800">
+        <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-6 text-xs text-slate-800">
           {/* Fiscal Year */}
           <div>
             <label className="font-bold text-slate-900 mb-2 flex items-center space-x-1.5 text-xs">
@@ -59,13 +59,13 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
               <span>Năm tài chính (Fiscal Year)</span>
             </label>
             <div className="grid grid-cols-4 gap-2">
-              {['all', '2025', '2024', '2023', '2022'].map((yr) => (
+              {['all', '2025', '2024', '2023'].map((yr) => (
                 <button
                   key={yr}
                   onClick={() => onFilterChange({ fiscalYear: yr })}
-                  className={`py-2 rounded-lg border font-mono text-center font-medium transition-all ${
+                  className={`py-2.5 rounded-xl border font-mono text-center font-bold text-xs transition-all min-h-[44px] ${
                     filterState.fiscalYear === yr
-                      ? 'bg-blue-600 border-blue-600 text-white font-bold shadow-xs'
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
@@ -81,10 +81,10 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
               <Briefcase className="w-4 h-4 text-indigo-600" />
               <span>Loại dịch vụ (Service Type)</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { id: 'all', label: 'Tất cả dịch vụ' },
-                { id: 'Audit', label: 'Kiểm toán & Xát nhận' },
+                { id: 'Audit', label: 'Kiểm toán & Xác nhận' },
                 { id: 'CFO', label: 'Tư vấn CFO & Tài chính' },
                 { id: 'Consulting', label: 'Tư vấn Quản trị' },
                 { id: 'Legal', label: 'Pháp lý & Hợp đồng' },
@@ -93,14 +93,14 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
                 <button
                   key={st.id}
                   onClick={() => onFilterChange({ serviceType: st.id })}
-                  className={`px-3 py-2 rounded-lg border text-left font-medium transition-all flex items-center justify-between ${
+                  className={`px-3 py-3 rounded-xl border text-left font-semibold text-xs transition-all flex items-center justify-between min-h-[44px] ${
                     filterState.serviceType === st.id
-                      ? 'bg-indigo-600 border-indigo-600 text-white font-bold shadow-xs'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <span>{st.label}</span>
-                  {filterState.serviceType === st.id && <Check className="w-3.5 h-3.5 text-white" />}
+                  {filterState.serviceType === st.id && <Check className="w-4 h-4 text-white" />}
                 </button>
               ))}
             </div>
@@ -112,7 +112,7 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>Trạng thái Phê duyệt</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
                 { id: 'all', label: 'Tất cả trạng thái' },
                 { id: 'Approved', label: 'Đã duyệt (Approved)' },
@@ -122,14 +122,14 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
                 <button
                   key={st.id}
                   onClick={() => onFilterChange({ status: st.id })}
-                  className={`px-3 py-2 rounded-lg border text-left font-medium transition-all flex items-center justify-between ${
+                  className={`px-3 py-3 rounded-xl border text-left font-semibold text-xs transition-all flex items-center justify-between min-h-[44px] ${
                     filterState.status === st.id
-                      ? 'bg-emerald-600 border-emerald-600 text-white font-bold shadow-xs'
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
                       : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   <span>{st.label}</span>
-                  {filterState.status === st.id && <Check className="w-3.5 h-3.5 text-white" />}
+                  {filterState.status === st.id && <Check className="w-4 h-4 text-white" />}
                 </button>
               ))}
             </div>
@@ -141,16 +141,16 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
               <Tag className="w-4 h-4 text-purple-600" />
               <span>Thẻ Phân loại (Tags)</span>
             </label>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {availableTags.map((tag) => {
                 const selected = filterState.selectedTags.includes(tag);
                 return (
                   <button
                     key={tag}
                     onClick={() => toggleTag(tag)}
-                    className={`px-2.5 py-1 rounded-full text-xs border transition-all ${
+                    className={`px-3 py-2 rounded-xl text-xs border font-semibold transition-all min-h-[38px] ${
                       selected
-                        ? 'bg-purple-600 border-purple-600 text-white font-semibold'
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
                         : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
@@ -162,19 +162,19 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer with Thumb-Friendly Buttons */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center space-x-3">
           <button
             onClick={onResetFilters}
-            className="flex-1 flex items-center justify-center space-x-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold text-xs py-2 rounded-lg transition-colors"
+            className="flex-1 flex items-center justify-center space-x-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs py-3 rounded-xl transition-colors min-h-[44px]"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Đặt lại bộ lọc</span>
+            <RotateCcw className="w-4 h-4" />
+            <span>Xóa lọc</span>
           </button>
 
           <button
             onClick={onClose}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs py-2 rounded-lg transition-colors"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-3 rounded-xl shadow-md transition-colors min-h-[44px]"
           >
             Áp dụng
           </button>

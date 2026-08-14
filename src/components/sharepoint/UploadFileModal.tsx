@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, UploadCloud, FileText, Lock, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, UploadCloud, FileText, Lock, Sparkles, CheckCircle2, Camera, Image, FileUp } from 'lucide-react';
 import { ServiceType, FileStatus } from '@/types/sharepoint';
 
 interface UploadFileModalProps {
@@ -33,6 +33,7 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
   const [status, setStatus] = React.useState<FileStatus>('Approved');
   const [tagsInput, setTagsInput] = React.useState('Hợp đồng, Báo cáo');
   const [uploading, setUploading] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
 
   if (!isOpen) return null;
 
@@ -51,14 +52,29 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
     if (isReadOnly) return;
 
     setUploading(true);
+    setProgress(20);
+
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) {
+          clearInterval(interval);
+          return 90;
+        }
+        return prev + 25;
+      });
+    }, 150);
+
     setTimeout(() => {
+      clearInterval(interval);
+      setProgress(100);
+
       const tags = tagsInput
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean);
 
       onUpload({
-        name: fileName || selectedFile?.name || 'Tài_liệu_mới.pdf',
+        name: fileName || selectedFile?.name || 'Tai_lieu_moi.pdf',
         file: selectedFile,
         fiscalYear,
         serviceType,
@@ -67,13 +83,14 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
       });
 
       setUploading(false);
+      setProgress(0);
       onClose();
-    }, 400);
+    }, 700);
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in select-none">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-3 md:p-4 animate-fade-in select-none">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
         {/* Header */}
         <div className="p-4 bg-[#0F172A] text-white flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
@@ -82,13 +99,15 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm">Tải lên Tài liệu Mới</h3>
-              <p className="text-[11px] text-slate-400 font-mono truncate max-w-[280px]">Vào: {currentPathName}</p>
+              <p className="text-[11px] text-slate-400 font-mono truncate max-w-[220px] sm:max-w-[280px]">
+                Vào: {currentPathName}
+              </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
@@ -103,49 +122,78 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
         )}
 
         {/* Body Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* File Picker Dropzone */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Mobile Friendly File Selector (Camera / Photo / Files) */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">Chọn File tài liệu từ máy tính:</label>
-            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-blue-500 transition-colors bg-slate-50 cursor-pointer">
+            <label className="block text-xs font-bold text-slate-800 mb-1.5">
+              Chọn File tài liệu từ Máy tính hoặc Điện thoại:
+            </label>
+            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-blue-500 transition-colors bg-slate-50 cursor-pointer relative">
               <input
                 type="file"
-                disabled={isReadOnly}
+                disabled={isReadOnly || uploading}
                 onChange={handleFileChange}
+                accept="image/*,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
                 id="file-upload-input"
               />
-              <label htmlFor="file-upload-input" className="cursor-pointer block">
-                <UploadCloud className="w-8 h-8 mx-auto text-blue-600 mb-1" />
-                <p className="text-xs font-semibold text-slate-700">
-                  {selectedFile ? selectedFile.name : 'Nhấp vào đây để chọn File (PDF, Excel, Word, Image)'}
+              <label htmlFor="file-upload-input" className="cursor-pointer block space-y-2">
+                <UploadCloud className="w-10 h-10 mx-auto text-blue-600" />
+                <p className="text-xs font-bold text-slate-800">
+                  {selectedFile ? selectedFile.name : 'Nhấp vào đây để chọn File (PDF, Excel, Word, Ảnh)'}
                 </p>
-                <p className="text-[11px] text-slate-400">Dung lượng tối đa: 50MB</p>
+                <div className="flex items-center justify-center space-x-2 text-[11px] text-slate-500 pt-1">
+                  <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-medium flex items-center space-x-1">
+                    <FileUp className="w-3 h-3" />
+                    <span>File Manager</span>
+                  </span>
+                  <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-medium flex items-center space-x-1">
+                    <Camera className="w-3 h-3" />
+                    <span>Camera / Thư viện</span>
+                  </span>
+                </div>
               </label>
             </div>
           </div>
+
+          {/* Dynamic Progress Bar */}
+          {uploading && (
+            <div className="space-y-1.5 p-3 bg-blue-50 border border-blue-200 rounded-xl animate-in fade-in">
+              <div className="flex items-center justify-between text-xs text-blue-900 font-bold">
+                <span>Đang tải file lên Supabase Storage...</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">Tên tài liệu lưu trữ:</label>
             <input
               type="text"
-              disabled={isReadOnly}
+              disabled={isReadOnly || uploading}
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
               placeholder="VD: Bao_cao_Kiem_toan_Taichinh_2025.pdf"
-              className="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+              className="w-full text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 min-h-[44px]"
               required
             />
           </div>
 
           {/* Metadata Selections */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1">Năm tài chính:</label>
               <select
                 value={fiscalYear}
+                disabled={uploading}
                 onChange={(e) => setFiscalYear(Number(e.target.value))}
-                className="w-full text-xs p-2 rounded-lg border border-slate-300 font-mono bg-white"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-300 font-mono bg-white min-h-[44px]"
               >
                 <option value={2025}>2025</option>
                 <option value={2024}>2024</option>
@@ -158,8 +206,9 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1">Loại dịch vụ:</label>
               <select
                 value={serviceType}
+                disabled={uploading}
                 onChange={(e) => setServiceType(e.target.value as ServiceType)}
-                className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-300 bg-white min-h-[44px]"
               >
                 <option value="Audit">Kiểm toán</option>
                 <option value="CFO">Tư vấn CFO</option>
@@ -173,8 +222,9 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
               <label className="block text-xs font-bold text-slate-800 mb-1">Trạng thái:</label>
               <select
                 value={status}
+                disabled={uploading}
                 onChange={(e) => setStatus(e.target.value as FileStatus)}
-                className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white"
+                className="w-full text-xs p-2.5 rounded-lg border border-slate-300 bg-white min-h-[44px]"
               >
                 <option value="Approved">Đã duyệt</option>
                 <option value="Pending">Chờ duyệt</option>
@@ -184,32 +234,33 @@ export const UploadFileModal: React.FC<UploadFileModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">Thẻ Tag (phân cách bởi dấu phẩy):</label>
+            <label className="block text-xs font-bold text-slate-800 mb-1">Thẻ Tag (phân cách bằng dấu phẩy):</label>
             <input
               type="text"
+              disabled={isReadOnly || uploading}
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="VD: Hợp đồng, Báo cáo, Kiểm toán"
-              className="w-full text-xs p-2 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600"
+              placeholder="VD: Hợp đồng, Báo cáo, CFO"
+              className="w-full text-xs p-3 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 min-h-[44px]"
             />
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-3 flex items-center space-x-3">
+          {/* Footer Submit */}
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end space-x-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold py-2.5 rounded-lg transition-colors"
+              className="px-4 py-2.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors min-h-[44px]"
             >
-              Hủy
+              Hủy bỏ
             </button>
-
             <button
               type="submit"
               disabled={isReadOnly || uploading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-semibold py-2.5 rounded-lg transition-colors shadow-xs"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-md transition-colors disabled:opacity-50 min-h-[44px] flex items-center space-x-1.5"
             >
-              {uploading ? 'Đang tải lên Supabase Storage...' : 'Tải lên Tài liệu'}
+              <UploadCloud className="w-4 h-4" />
+              <span>{uploading ? 'Đang Upload...' : 'Lưu & Upload File'}</span>
             </button>
           </div>
         </form>

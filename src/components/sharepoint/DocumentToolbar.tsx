@@ -58,17 +58,18 @@ export const DocumentToolbar: React.FC<DocumentToolbarProps> = ({
     filterState.selectedTags.length;
 
   return (
-    <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 select-none">
+    <div className="bg-white border-b border-slate-200 px-3 md:px-4 py-2 flex items-center justify-between gap-2 select-none overflow-x-auto">
       {/* Left: Action Buttons */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1.5 shrink-0">
         {/* Create Client / Folder */}
         <button
           onClick={onOpenNewClientModal}
           disabled={!canModify}
-          className="flex items-center space-x-1.5 bg-[#0078D4] hover:bg-[#106EBE] disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xs transition-all"
+          className="flex items-center space-x-1.5 bg-[#0078D4] hover:bg-[#106EBE] disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition-all min-h-[44px]"
         >
           <FolderPlus className="w-4 h-4" />
-          <span>Tạo Khách hàng mới</span>
+          <span className="hidden sm:inline">Tạo KH mới</span>
+          <span className="sm:hidden">Tạo KH</span>
         </button>
 
         {/* Upload File */}
@@ -76,32 +77,32 @@ export const DocumentToolbar: React.FC<DocumentToolbarProps> = ({
           onClick={onOpenUploadModal}
           disabled={isReadOnly || !canModify}
           title={isReadOnly ? 'Hồ sơ đã lưu trữ (Read-Only) - Không thể upload file' : 'Tải lên tài liệu mới'}
-          className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 disabled:text-slate-400 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-md border border-slate-300 transition-all"
+          className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 disabled:text-slate-400 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-300 transition-all min-h-[44px]"
         >
-          {isReadOnly ? <Lock className="w-3.5 h-3.5 text-amber-600" /> : <UploadCloud className="w-4 h-4 text-blue-600" />}
-          <span>Tải lên File</span>
+          {isReadOnly ? <Lock className="w-4 h-4 text-amber-600" /> : <UploadCloud className="w-4 h-4 text-blue-600" />}
+          <span>Upload File</span>
         </button>
 
         {/* Archive / Restore actions for selected client */}
         {selectedClientName && (
-          <div className="flex items-center space-x-1 border-l border-slate-200 pl-2 ml-1">
+          <div className="flex items-center space-x-1 border-l border-slate-200 pl-1.5">
             {clientStatus === 'active' ? (
               <button
                 onClick={onArchiveClient}
                 disabled={!canModify}
-                className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-1.5 rounded border border-amber-300 transition-all"
+                className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-2 rounded-lg border border-amber-300 transition-all min-h-[44px]"
               >
-                <Archive className="w-3.5 h-3.5 text-amber-600" />
-                <span>Archive Hồ sơ</span>
+                <Archive className="w-4 h-4 text-amber-600" />
+                <span className="hidden sm:inline">Archive</span>
               </button>
             ) : (
               <button
                 onClick={onRestoreClient}
                 disabled={!canModify}
-                className="flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-1.5 rounded border border-emerald-300 transition-all"
+                className="flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-2 rounded-lg border border-emerald-300 transition-all min-h-[44px]"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Restore Khôi phục</span>
+                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                <span className="hidden sm:inline">Restore</span>
               </button>
             )}
           </div>
@@ -109,56 +110,46 @@ export const DocumentToolbar: React.FC<DocumentToolbarProps> = ({
       </div>
 
       {/* Right: Filters & View Switcher */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1.5 shrink-0">
         {/* Filter Drawer Toggle */}
         <button
           onClick={onOpenFilterDrawer}
-          className={`flex items-center space-x-1.5 text-xs font-medium px-2.5 py-1.5 rounded border transition-colors ${
+          className={`flex items-center space-x-1.5 text-xs font-medium px-3 py-2 rounded-lg border transition-colors min-h-[44px] ${
             activeFilterCount > 0
-              ? 'bg-blue-50 border-blue-300 text-blue-700'
+              ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold'
               : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
           }`}
         >
-          <Filter className="w-3.5 h-3.5 text-slate-500" />
-          <span>Bộ lọc Metadata</span>
+          <Filter className="w-4 h-4 text-slate-500" />
+          <span className="hidden sm:inline">Bộ lọc</span>
           {activeFilterCount > 0 && (
-            <span className="bg-blue-600 text-white rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold">
+            <span className="bg-blue-600 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">
               {activeFilterCount}
             </span>
           )}
         </button>
 
-        {/* View Switcher: List vs Grid */}
-        <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-300">
+        {/* View Mode Switcher (List / Grid) */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
           <button
             onClick={() => onViewModeChange('list')}
-            title="Chế độ Xem Danh sách (List View)"
-            className={`p-1 rounded transition-colors ${
-              viewMode === 'list' ? 'bg-white text-blue-600 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+            title="Dạng danh sách"
+            className={`p-2 rounded-md transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${
+              viewMode === 'list' ? 'bg-white text-blue-600 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <List className="w-4 h-4" />
           </button>
-
           <button
             onClick={() => onViewModeChange('grid')}
-            title="Chế độ Xem Lưới (Grid View)"
-            className={`p-1 rounded transition-colors ${
-              viewMode === 'grid' ? 'bg-white text-blue-600 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+            title="Dạng lưới thẻ"
+            className={`p-2 rounded-md transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center ${
+              viewMode === 'grid' ? 'bg-white text-blue-600 shadow-xs font-bold' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Refresh button */}
-        <button
-          onClick={onRefresh}
-          title="Tải lại dữ liệu"
-          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded border border-slate-300 transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
       </div>
     </div>
   );

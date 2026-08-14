@@ -18,6 +18,8 @@ import {
   Users,
   Building2,
   CheckCircle2,
+  Menu,
+  X,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '@/types/sharepoint';
 
@@ -28,6 +30,7 @@ interface TopbarProps {
   onRoleSwitch: (role: UserRole) => void;
   onOpenUserManagement?: () => void;
   onOpenProfile?: () => void;
+  onOpenMobileMenu?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -37,9 +40,11 @@ export const Topbar: React.FC<TopbarProps> = ({
   onRoleSwitch,
   onOpenUserManagement,
   onOpenProfile,
+  onOpenMobileMenu,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showRoleSubMenu, setShowRoleSubMenu] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -49,7 +54,6 @@ export const Topbar: React.FC<TopbarProps> = ({
     } catch {
       // Ignore
     }
-    // Delete demo session cookie
     document.cookie = 'fica_demo_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     router.push('/login');
   };
@@ -87,35 +91,46 @@ export const Topbar: React.FC<TopbarProps> = ({
   const userDept = currentUser?.department || 'Fica Holding';
 
   return (
-    <header className="h-14 bg-[#0F172A] text-white flex items-center justify-between px-4 border-b border-slate-800 select-none z-30 sticky top-0 shadow-md">
-      {/* Left: App Launcher & FICA Logo */}
-      <div className="flex items-center space-x-3 min-w-[280px]">
+    <header className="h-14 bg-[#0F172A] text-white flex items-center justify-between px-3 md:px-4 border-b border-slate-800 select-none z-30 sticky top-0 shadow-md">
+      {/* Left: Mobile Menu Trigger & Logo */}
+      <div className="flex items-center space-x-2 md:space-x-3 shrink-0">
+        {/* Mobile Hamburger Drawer Trigger */}
+        <button
+          onClick={onOpenMobileMenu}
+          title="Mở Menu điều hướng"
+          className="p-2 md:hidden hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+        >
+          <Menu className="w-5 h-5 text-blue-400" />
+        </button>
+
+        {/* Desktop App Launcher */}
         <button
           title="App Launcher"
-          className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-300 hover:text-white"
+          className="hidden md:flex p-2 hover:bg-slate-800 rounded-md text-slate-300 hover:text-white min-w-[44px] min-h-[44px] items-center justify-center"
         >
           <Grid className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center space-x-2.5">
-          {/* Official Fica Holding Symbol Component */}
-          <FicaLogo className="w-8 h-8" />
-
+        <div className="flex items-center space-x-2">
+          <FicaLogo className="w-7 h-7 md:w-8 md:h-8" />
           <div>
-            <div className="flex items-center space-x-1.5 font-bold tracking-wide text-sm text-slate-100">
+            <div className="flex items-center space-x-1.5 font-bold tracking-wide text-xs md:text-sm text-slate-100">
               <span>FICA HOLDING</span>
-              <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono border border-blue-400/30">
+              <span className="text-[10px] md:text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono border border-blue-400/30">
                 SharePoint
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">Hệ thống Quản trị Tài liệu Tư vấn Financial</p>
+            <p className="text-[9px] md:text-[10px] text-slate-400 font-medium hidden sm:block">
+              Hệ thống Quản trị Tài liệu Tư vấn Financial
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Middle: Global Search */}
-      <div className="flex-1 max-w-2xl mx-6">
-        <div className="relative group">
+      {/* Middle: Search Bar (Desktop & Mobile) */}
+      <div className="flex-1 max-w-xl mx-2 md:mx-6">
+        {/* Desktop Search Bar */}
+        <div className="relative group hidden sm:block">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-400">
             <Search className="w-4 h-4 transition-colors" />
           </div>
@@ -123,51 +138,58 @@ export const Topbar: React.FC<TopbarProps> = ({
             type="text"
             value={searchQuery || ''}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm kiếm nhanh theo Tên KH, Mã KH, Tên file hoặc Thẻ Tag... (Alt+/)"
-            className="w-full bg-slate-900/90 text-sm text-slate-100 placeholder-slate-400 pl-10 pr-12 py-1.5 rounded-md border border-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+            placeholder="Tìm nhanh KH, File, Thẻ Tag..."
+            className="w-full bg-slate-900/90 text-xs md:text-sm text-slate-100 placeholder-slate-400 pl-10 pr-8 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all min-h-[44px]"
           />
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-slate-500 font-mono pointer-events-none">
-            Ctrl+K
-          </div>
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Right: Actions & User Menu */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1 md:space-x-2 shrink-0">
+        {/* Mobile Search Glass Button */}
         <button
-          title="Thông báo hệ thống"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md relative transition-colors"
+          onClick={() => setShowMobileSearch(!showMobileSearch)}
+          title="Tìm kiếm"
+          className="sm:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-[#0F172A]" />
+          <Search className="w-5 h-5 text-blue-400" />
         </button>
 
         <button
-          title="Trợ giúp & Hướng dẫn"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+          title="Thông báo hệ thống"
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg relative min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
-          <HelpCircle className="w-4 h-4" />
+          <Bell className="w-4 h-4" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-[#0F172A]" />
         </button>
 
         {userRole === 'admin' && onOpenUserManagement && (
           <button
             onClick={onOpenUserManagement}
-            title="Quản lý Người dùng & Phân quyền"
-            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+            title="Quản lý Người dùng"
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
           >
             <Users className="w-4 h-4 text-blue-400" />
           </button>
         )}
 
-        <div className="h-5 w-[1px] bg-slate-700 mx-1" />
+        <div className="h-5 w-[1px] bg-slate-700 mx-0.5 md:mx-1 hidden xs:block" />
 
-        {/* User Profile Badge & Dropdown Menu */}
+        {/* User Profile Avatar & Dropdown */}
         <div className="relative">
           <button
             onClick={() => setShowUserDropdown(!showUserDropdown)}
-            className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-md transition-colors border border-slate-800 hover:border-slate-700"
+            className="flex items-center space-x-2 p-1 hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 min-w-[44px] min-h-[44px] justify-center"
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
               {getInitials(userName)}
             </div>
             <div className="text-left hidden lg:block">
@@ -179,104 +201,120 @@ export const Topbar: React.FC<TopbarProps> = ({
               </div>
               <p className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">{userEmail}</p>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden lg:block" />
           </button>
 
-          {/* POPUP DROPDOWN MENU */}
+          {/* Dropdown Menu */}
           {showUserDropdown && (
-            <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-fade-in text-slate-200 divide-y divide-slate-800">
-              {/* User Identity Section */}
-              <div className="px-4 py-3 bg-slate-950/60">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow">
+            <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 text-xs">
+              <div className="px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/50">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
                     {getInitials(userName)}
                   </div>
                   <div className="overflow-hidden">
-                    <h4 className="font-bold text-sm text-slate-100 truncate">{userName}</h4>
-                    <p className="text-xs text-slate-400 font-mono truncate">{userEmail}</p>
-                    <div className="mt-1 flex items-center space-x-1">
-                      <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(userRole)}`}>
-                        {userRole}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-medium truncate">{userDept}</span>
-                    </div>
+                    <p className="font-bold text-white truncate text-xs">{userName}</p>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">{userEmail}</p>
+                    <span className={`inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded mt-1 ${getRoleBadgeColor(userRole)}`}>
+                      Quyền: {userRole}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Navigation Actions */}
               <div className="py-1">
-                <button
-                  onClick={() => {
-                    if (onOpenProfile) onOpenProfile();
-                    setShowUserDropdown(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-                >
-                  <User className="w-4 h-4 text-blue-400" />
-                  <span>Hồ sơ cá nhân (My Profile)</span>
-                </button>
-
-                {userRole === 'admin' && onOpenUserManagement && (
+                {onOpenProfile && (
                   <button
                     onClick={() => {
-                      onOpenUserManagement();
                       setShowUserDropdown(false);
+                      onOpenProfile();
                     }}
-                    className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                    className="w-full text-left px-3.5 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white flex items-center space-x-2 min-h-[44px]"
                   >
-                    <Users className="w-4 h-4 text-purple-400" />
-                    <span>Quản lý Người dùng & RBAC</span>
+                    <User className="w-4 h-4 text-blue-400" />
+                    <span>Hồ sơ cá nhân (My Profile)</span>
                   </button>
                 )}
 
-                {/* Submenu toggle for Role Switcher */}
-                <button
-                  onClick={() => setShowRoleSubMenu(!showRoleSubMenu)}
-                  className="w-full text-left px-4 py-2 text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Shield className="w-4 h-4 text-amber-400" />
-                    <span>Giả lập Chuyển đổi Vai trò</span>
-                  </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowRoleSubMenu(!showRoleSubMenu)}
+                    className="w-full text-left px-3.5 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white flex items-center justify-between min-h-[44px]"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <UserCheck className="w-4 h-4 text-purple-400" />
+                      <span>Đổi Vai trò (Switch Role)</span>
+                    </div>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
 
-                {showRoleSubMenu && (
-                  <div className="bg-slate-950/80 my-1 py-1 px-2 border-y border-slate-800">
-                    {(['admin', 'manager', 'staff', 'client'] as UserRole[]).map((r) => (
-                      <button
-                        key={r}
-                        onClick={() => {
-                          onRoleSwitch(r);
-                          setShowRoleSubMenu(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between hover:bg-slate-800 rounded transition-colors uppercase font-mono ${
-                          userRole === r ? 'text-blue-400 font-bold' : 'text-slate-400'
-                        }`}
-                      >
-                        <span>{r}</span>
-                        {userRole === r && <UserCheck className="w-3.5 h-3.5 text-blue-400" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {showRoleSubMenu && (
+                    <div className="bg-slate-950 px-3 py-2 space-y-1.5 border-y border-slate-800">
+                      {[
+                        { r: 'admin' as UserRole, label: 'Quản trị viên (Admin)' },
+                        { r: 'manager' as UserRole, label: 'Trưởng phòng (Manager)' },
+                        { r: 'staff' as UserRole, label: 'Chuyên viên (Staff)' },
+                        { r: 'client' as UserRole, label: 'Khách hàng (Client Read-Only)' },
+                      ].map((item) => (
+                        <button
+                          key={item.r}
+                          onClick={() => {
+                            onRoleSwitch(item.r);
+                            setShowRoleSubMenu(false);
+                            setShowUserDropdown(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded text-[11px] flex items-center justify-between min-h-[36px] ${
+                            userRole === item.r ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          {userRole === item.r && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* LOGOUT BUTTON */}
-              <div className="p-1">
+              <div className="border-t border-slate-800 pt-1">
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left px-4 py-2 text-xs flex items-center space-x-2 text-red-400 hover:bg-red-950/50 hover:text-red-300 rounded transition-colors font-bold"
+                  className="w-full text-left px-3.5 py-2.5 text-red-400 hover:bg-red-500/10 flex items-center space-x-2 font-medium min-h-[44px]"
                 >
-                  <LogOut className="w-4 h-4 text-red-400" />
-                  <span>Đăng xuất (Sign Out)</span>
+                  <LogOut className="w-4 h-4" />
+                  <span>Đăng xuất tài khoản</span>
                 </button>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Mobile Search Popover Overlay */}
+      {showMobileSearch && (
+        <div className="absolute top-14 left-0 right-0 bg-[#0F172A] border-b border-slate-800 p-3 z-40 sm:hidden animate-in slide-in-from-top-2 shadow-xl">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-blue-400" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery || ''}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Nhập tên KH, Mã KH, Tên file hoặc Thẻ Tag..."
+              className="w-full bg-slate-900 text-slate-100 text-sm pl-9 pr-9 py-2.5 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 min-h-[44px]"
+            />
+            <button
+              onClick={() => {
+                setShowMobileSearch(false);
+                onSearchChange('');
+              }}
+              className="absolute right-2.5 top-2.5 p-1 text-slate-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

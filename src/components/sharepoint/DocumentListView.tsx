@@ -22,6 +22,7 @@ import {
   Eye,
   Info,
   Edit3,
+  X,
 } from 'lucide-react';
 import { ClientFolder, FolderItem, DocumentFile, FileStatus } from '@/types/sharepoint';
 import { ContextMenuPosition } from './ContextMenu';
@@ -78,21 +79,26 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   isReadOnly,
 }) => {
   const [activeMenuId, setActiveMenuId] = React.useState<string | null>(null);
+  const [mobileActionItem, setMobileActionItem] = React.useState<{
+    client?: ClientFolder;
+    subFolder?: FolderItem;
+    file?: DocumentFile;
+  } | null>(null);
 
   const getFileIcon = (mimeType: string, name: string) => {
     if (name.endsWith('.pdf') || mimeType.includes('pdf')) {
-      return <FileText className="w-5 h-5 text-red-500" />;
+      return <FileText className="w-6 h-6 text-red-500" />;
     }
     if (name.endsWith('.xlsx') || name.endsWith('.xls') || mimeType.includes('excel') || mimeType.includes('spreadsheet')) {
-      return <FileSpreadsheet className="w-5 h-5 text-emerald-600" />;
+      return <FileSpreadsheet className="w-6 h-6 text-emerald-600" />;
     }
     if (name.endsWith('.docx') || name.endsWith('.doc') || mimeType.includes('word')) {
-      return <FileText className="w-5 h-5 text-blue-600" />;
+      return <FileText className="w-6 h-6 text-blue-600" />;
     }
     if (mimeType.includes('image')) {
-      return <ImageIcon className="w-5 h-5 text-purple-500" />;
+      return <ImageIcon className="w-6 h-6 text-purple-500" />;
     }
-    return <FileCode className="w-5 h-5 text-slate-500" />;
+    return <FileCode className="w-6 h-6 text-slate-500" />;
   };
 
   const getStatusBadge = (status: FileStatus | 'active' | 'archived') => {
@@ -155,8 +161,169 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   const isAllSelected = allCount > 0 && selectedCount === allCount;
 
   return (
-    <div className="bg-white border-t border-slate-200 shadow-xs overflow-x-auto select-none">
-      <table className="w-full text-left text-xs border-collapse">
+    <div className="bg-white border-t border-slate-200 shadow-xs select-none">
+      {/* MOBILE CARD VIEW FOR SMARTPHONES (< md) */}
+      <div className="block md:hidden space-y-3 p-3 bg-slate-100 pb-20">
+        {/* Render Mobile Client Cards */}
+        {isFolderView &&
+          clients.map((client) => {
+            const isSelected = selectedClientIds.includes(client.id);
+            return (
+              <div
+                key={client.id}
+                onClick={() => onSelectClient(client)}
+                className={`p-3.5 rounded-xl border bg-white shadow-xs active:bg-slate-50 cursor-pointer space-y-2 min-h-[44px] ${
+                  isSelected ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/50' : 'border-slate-200'
+                }`}
+              >
+                {/* Row 1: Folder Icon + Title + Action Button */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="p-2 rounded-lg bg-amber-100/80 border border-amber-200 text-amber-700 shrink-0">
+                      <Folder className="w-6 h-6 fill-amber-400 text-amber-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-sm truncate">{client.folder_name}</h4>
+                      <p className="text-[11px] text-slate-500 font-mono">Mã KH: {client.code}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMobileActionItem({ client });
+                    }}
+                    className="p-2 text-slate-500 hover:text-slate-900 rounded-lg border border-slate-200 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Row 2: Badges */}
+                <div className="flex items-center space-x-2">
+                  <span className="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px] font-mono border border-blue-200">
+                    {client.service_type || 'CFO'}
+                  </span>
+                  {getStatusBadge(client.status)}
+                </div>
+
+                {/* Row 3: Meta Info */}
+                <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
+                  <span>Cập nhật: {new Date(client.updated_at).toLocaleDateString('vi-VN')}</span>
+                  <span>Tạo bởi: {client.created_by_name || 'Admin'}</span>
+                </div>
+              </div>
+            );
+          })}
+
+        {/* Render Mobile SubFolder Cards */}
+        {isSubFolderView &&
+          subFolders.map((subFolder) => (
+            <div
+              key={subFolder.id}
+              onClick={() => onSelectSubFolder(subFolder)}
+              className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-xs active:bg-slate-50 cursor-pointer flex items-center justify-between min-h-[52px]"
+            >
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className="p-2 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700 shrink-0">
+                  <FolderOpen className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-slate-900 text-sm truncate">{subFolder.name}</h4>
+                  <p className="text-[11px] text-slate-500">Thư mục hệ thống Fica</p>
+                </div>
+              </div>
+              <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
+                Mở →
+              </span>
+            </div>
+          ))}
+
+        {/* Render Mobile File Cards */}
+        {isFileView &&
+          files.map((file) => {
+            const isSelected = selectedFileIds.includes(file.id);
+            return (
+              <div
+                key={file.id}
+                onClick={() => onPreviewFile(file)}
+                className={`p-3.5 rounded-xl border bg-white shadow-xs active:bg-slate-50 cursor-pointer space-y-2.5 min-h-[44px] ${
+                  isSelected ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/50' : 'border-slate-200'
+                }`}
+              >
+                {/* Row 1: File Icon + File Name + Action Sheet Button */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    <div className="shrink-0">{getFileIcon(file.mime_type, file.name)}</div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-xs md:text-sm leading-snug line-clamp-2">
+                        {file.name}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        {formatFileSize(file.file_size)} • v{file.current_version}.0
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMobileActionItem({ file });
+                    }}
+                    className="p-2 text-slate-500 hover:text-slate-900 rounded-lg border border-slate-200 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Row 2: Service Type & Status Badges */}
+                <div className="flex items-center space-x-2">
+                  <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded text-[10px] border border-indigo-200">
+                    {file.service_type}
+                  </span>
+                  <span className="bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded text-[10px]">
+                    Năm {file.fiscal_year}
+                  </span>
+                  {getStatusBadge(file.status)}
+                </div>
+
+                {/* Row 3: Tag Chips */}
+                {file.tags && file.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {file.tags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded flex items-center space-x-1"
+                      >
+                        <Tag className="w-2.5 h-2.5 text-slate-400" />
+                        <span>{tag}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+        {/* Empty States on Mobile */}
+        {isFolderView && clients.length === 0 && (
+          <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
+            <Folder className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+            <p className="font-semibold text-slate-700 text-sm">Chưa có khách hàng nào</p>
+          </div>
+        )}
+
+        {isFileView && files.length === 0 && (
+          <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
+            <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
+            <p className="font-semibold text-slate-700 text-sm">Thư mục trống</p>
+            <p className="text-xs text-slate-400 mt-1">Bấm nút "Upload File" ở góc trên để tải lên tài liệu mới.</p>
+          </div>
+        )}
+      </div>
+
+      {/* DESKTOP MULTI-COLUMN TABLE VIEW (Hidden on Mobile < md) */}
+      <table className="hidden md:table w-full text-left text-xs border-collapse">
         {/* Table Header */}
         <thead>
           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold select-none">
@@ -180,7 +347,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
 
         {/* Table Body */}
         <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
-          {/* LEVEL 1: Render Root Client Folders (With Right-Click Context Menu) */}
+          {/* LEVEL 1: Render Root Client Folders */}
           {isFolderView &&
             clients.map((client) => {
               const isSelected = selectedClientIds.includes(client.id);
@@ -226,7 +393,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   </td>
                   <td className="p-3">
                     <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-mono border border-slate-200">
-                      Khách hàng
+                      {client.service_type || 'CFO'}
                     </span>
                   </td>
                   <td className="p-3 text-slate-600 font-mono text-[11px]">
@@ -245,23 +412,13 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                     <div className="relative">
                       <button
                         onClick={() => setActiveMenuId(activeMenuId === client.id ? null : client.id)}
-                        className="p-1 hover:bg-slate-200 rounded text-slate-600"
+                        className="p-1 hover:bg-slate-200 rounded text-slate-600 min-w-[36px] min-h-[36px] flex items-center justify-center mx-auto"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
+
                       {activeMenuId === client.id && (
                         <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
-                          <button
-                            onClick={() => {
-                              onRenameClientModal(client);
-                              setActiveMenuId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
-                          >
-                            <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Đổi tên (Rename)</span>
-                          </button>
-
                           <button
                             onClick={() => {
                               onSelectClient(client);
@@ -272,18 +429,16 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             <FolderOpen className="w-3.5 h-3.5 text-blue-600" />
                             <span>Mở thư mục</span>
                           </button>
-
                           <button
                             onClick={() => {
-                              onOpenDetailsPane({ client });
+                              onRenameClientModal(client);
                               setActiveMenuId(null);
                             }}
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
-                            <Info className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Xem chi tiết Metadata</span>
+                            <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Đổi tên thư mục</span>
                           </button>
-
                           {client.status === 'active' ? (
                             <button
                               onClick={() => {
@@ -304,10 +459,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               className="w-full px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2"
                             >
                               <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Restore Hồ sơ</span>
+                              <span>Khôi phục Active</span>
                             </button>
                           )}
-
                           <button
                             onClick={() => {
                               onDeleteClientModal(client);
@@ -326,74 +480,64 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               );
             })}
 
-          {/* LEVEL 2: Render Standard 4 Subfolders */}
+          {/* LEVEL 2: Render Client Subfolders */}
           {isSubFolderView &&
-            subFolders.map((sf) => (
+            subFolders.map((subFolder) => (
               <tr
-                key={sf.id}
-                onClick={() => onSelectSubFolder(sf)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onOpenContextMenu({ x: e.clientX, y: e.clientY, subFolder: sf });
-                }}
+                key={subFolder.id}
+                onClick={() => onSelectSubFolder(subFolder)}
                 className="hover:bg-blue-50/60 cursor-pointer transition-colors"
               >
-                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" disabled className="rounded border-slate-200 text-slate-300" />
+                <td className="p-3 text-center">
+                  <input type="checkbox" disabled className="rounded border-slate-300 opacity-40 cursor-not-allowed" />
                 </td>
                 <td className="p-3">
                   <div className="flex items-center space-x-3">
                     <div className="p-1.5 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700">
-                      <Folder className="w-5 h-5 fill-blue-400 text-blue-600" />
+                      <FolderOpen className="w-5 h-5 text-blue-600" />
                     </div>
-                    <div>
-                      <div className="font-bold text-slate-900 hover:text-blue-600 transition-colors">
-                        {sf.name}
-                      </div>
-                      <p className="text-[11px] text-slate-500 font-normal">Thư mục hệ thống chuẩn</p>
-                    </div>
+                    <span className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors">
+                      {subFolder.name}
+                    </span>
                   </div>
                 </td>
-                <td className="p-3">
-                  <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[11px] border border-indigo-200">
-                    Phân loại chuẩn
-                  </span>
-                </td>
+                <td className="p-3 text-slate-500 text-[11px]">Thư mục hệ thống</td>
                 <td className="p-3 text-slate-600 font-mono text-[11px]">
-                  {new Date(sf.updated_at).toLocaleDateString('vi-VN')}
+                  {new Date(subFolder.updated_at).toLocaleDateString('vi-VN')}
                 </td>
-                <td className="p-3 text-slate-600">Fica System</td>
-                <td className="p-3">{getStatusBadge(isReadOnly ? 'archived' : 'active')}</td>
+                <td className="p-3 text-slate-600">Fica Engine</td>
                 <td className="p-3">
-                  <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded">
-                    Chính thức
+                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                    <span>Mặc định</span>
                   </span>
                 </td>
-                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => onOpenDetailsPane({ subFolder: sf })}
-                    className="p-1 hover:bg-slate-200 rounded text-slate-600"
-                    title="Thông tin thư mục"
-                  >
-                    <Info className="w-4 h-4" />
+                <td className="p-3">
+                  <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
+                    System Subfolder
+                  </span>
+                </td>
+                <td className="p-3 text-center">
+                  <button className="p-1 hover:bg-slate-200 rounded text-slate-400 cursor-not-allowed">
+                    <MoreVertical className="w-4 h-4" />
                   </button>
                 </td>
               </tr>
             ))}
 
-          {/* LEVEL 3: Render Document Files (Right Click & Double Click) */}
-          {(isFileView || (!isFolderView && !isSubFolderView)) &&
+          {/* LEVEL 3: Render Document Files */}
+          {isFileView &&
             files.map((file) => {
               const isSelected = selectedFileIds.includes(file.id);
               return (
                 <tr
                   key={file.id}
-                  onDoubleClick={() => onPreviewFile(file)}
+                  onClick={() => onPreviewFile(file)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     onOpenContextMenu({ x: e.clientX, y: e.clientY, file });
                   }}
-                  className={`hover:bg-slate-50 transition-colors cursor-pointer ${
+                  className={`hover:bg-blue-50/60 cursor-pointer transition-colors ${
                     isSelected ? 'bg-blue-50/90 font-bold' : ''
                   }`}
                 >
@@ -407,45 +551,38 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   </td>
                   <td className="p-3">
                     <div className="flex items-center space-x-3">
-                      <div className="p-1.5 rounded-lg bg-slate-100 border border-slate-200">
-                        {getFileIcon(file.mime_type, file.name)}
-                      </div>
+                      <div className="shrink-0">{getFileIcon(file.mime_type, file.name)}</div>
                       <div>
-                        <div className="font-semibold text-slate-900 hover:text-blue-600 transition-colors flex items-center space-x-2">
-                          <span>{file.name}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onOpenVersionHistory(file);
-                            }}
-                            className="bg-blue-100 text-blue-800 text-[10px] font-mono px-1.5 py-0.2 rounded hover:bg-blue-200 font-bold border border-blue-300"
-                          >
-                            v{file.current_version}
-                          </button>
+                        <div className="font-bold text-slate-900 text-xs md:text-sm hover:text-blue-600 transition-colors line-clamp-1">
+                          {file.name}
                         </div>
-                        <p className="text-[11px] text-slate-500 font-mono">
-                          {formatFileSize(file.file_size)} • (Nhấp đúp để xem trước)
+                        <p className="text-[11px] text-slate-500 font-mono font-normal">
+                          {formatFileSize(file.file_size)} • v{file.current_version}.0
                         </p>
                       </div>
                     </div>
                   </td>
                   <td className="p-3">
-                    <div className="flex flex-col space-y-0.5">
-                      <span className="text-[11px] font-bold text-slate-700">{file.service_type}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">Năm {file.fiscal_year}</span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded text-[11px] border border-indigo-200">
+                        {file.service_type}
+                      </span>
+                      <span className="bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded text-[11px] border border-slate-200">
+                        {file.fiscal_year}
+                      </span>
                     </div>
                   </td>
                   <td className="p-3 text-slate-600 font-mono text-[11px]">
                     {new Date(file.updated_at).toLocaleDateString('vi-VN')}
                   </td>
-                  <td className="p-3 text-slate-600">{file.modified_by_name || file.created_by_name}</td>
-                  <td className="p-3">{getStatusBadge(isReadOnly ? 'Archived' : file.status)}</td>
+                  <td className="p-3 text-slate-600">{file.created_by_name || 'Admin'}</td>
+                  <td className="p-3">{getStatusBadge(file.status)}</td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1">
-                      {file.tags.map((tag) => (
+                      {file.tags.map((tag, i) => (
                         <span
-                          key={tag}
-                          className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded flex items-center space-x-1"
+                          key={i}
+                          className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded flex items-center space-x-1"
                         >
                           <Tag className="w-2.5 h-2.5 text-slate-400" />
                           <span>{tag}</span>
@@ -457,7 +594,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                     <div className="relative">
                       <button
                         onClick={() => setActiveMenuId(activeMenuId === file.id ? null : file.id)}
-                        className="p-1 hover:bg-slate-200 rounded text-slate-600"
+                        className="p-1 hover:bg-slate-200 rounded text-slate-600 min-w-[36px] min-h-[36px] flex items-center justify-center mx-auto"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -528,7 +665,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               );
             })}
 
-          {/* Empty states */}
+          {/* Empty states Desktop */}
           {isFolderView && clients.length === 0 && (
             <tr>
               <td colSpan={8} className="p-8 text-center text-slate-500">
@@ -549,6 +686,153 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
           )}
         </tbody>
       </table>
+
+      {/* MOBILE ACTION BOTTOM SHEET (Pulls up from bottom for easy tap targets) */}
+      {mobileActionItem && (
+        <div className="fixed inset-0 z-50 md:hidden flex items-end animate-in fade-in">
+          <div
+            onClick={() => setMobileActionItem(null)}
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs"
+          />
+          <div className="relative w-full bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl p-4 space-y-3 z-50 animate-in slide-in-from-bottom-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 text-sm truncate max-w-[280px]">
+                {mobileActionItem.file?.name || mobileActionItem.client?.folder_name}
+              </h3>
+              <button
+                onClick={() => setMobileActionItem(null)}
+                className="p-1 text-slate-400 hover:text-slate-900 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1 py-1">
+              {mobileActionItem.file && (
+                <>
+                  <button
+                    onClick={() => {
+                      onPreviewFile(mobileActionItem.file!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <Eye className="w-5 h-5 text-blue-600" />
+                    <span>Xem trước file (Preview)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onOpenDetailsPane({ file: mobileActionItem.file });
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <Info className="w-5 h-5 text-blue-600" />
+                    <span>Xem thông tin chi tiết</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onDownloadFile(mobileActionItem.file!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <Download className="w-5 h-5 text-blue-600" />
+                    <span>Tải về máy (Download)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onOpenVersionHistory(mobileActionItem.file!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <History className="w-5 h-5 text-purple-600" />
+                    <span>Lịch sử phiên bản</span>
+                  </button>
+
+                  {!isReadOnly && (
+                    <button
+                      onClick={() => {
+                        onDeleteFile(mobileActionItem.file!.id);
+                        setMobileActionItem(null);
+                      }}
+                      className="w-full text-left px-3 py-3 text-red-600 font-semibold hover:bg-red-50 rounded-xl flex items-center space-x-3 min-h-[48px] border-t border-slate-100"
+                    >
+                      <Trash2 className="w-5 h-5 text-red-500" />
+                      <span>Xóa tài liệu</span>
+                    </button>
+                  )}
+                </>
+              )}
+
+              {mobileActionItem.client && (
+                <>
+                  <button
+                    onClick={() => {
+                      onSelectClient(mobileActionItem.client!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <FolderOpen className="w-5 h-5 text-blue-600" />
+                    <span>Mở thư mục khách hàng</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onRenameClientModal(mobileActionItem.client!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                  >
+                    <Edit3 className="w-5 h-5 text-blue-600" />
+                    <span>Đổi tên thư mục</span>
+                  </button>
+
+                  {mobileActionItem.client.status === 'active' ? (
+                    <button
+                      onClick={() => {
+                        onArchiveClient(mobileActionItem.client!);
+                        setMobileActionItem(null);
+                      }}
+                      className="w-full text-left px-3 py-3 text-amber-800 font-semibold hover:bg-amber-50 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                    >
+                      <Archive className="w-5 h-5 text-amber-600" />
+                      <span>Archive Hồ sơ</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        onRestoreClient(mobileActionItem.client!);
+                        setMobileActionItem(null);
+                      }}
+                      className="w-full text-left px-3 py-3 text-emerald-800 font-semibold hover:bg-emerald-50 rounded-xl flex items-center space-x-3 min-h-[48px]"
+                    >
+                      <RotateCcw className="w-5 h-5 text-emerald-600" />
+                      <span>Khôi phục Active</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      onDeleteClientModal(mobileActionItem.client!);
+                      setMobileActionItem(null);
+                    }}
+                    className="w-full text-left px-3 py-3 text-red-600 font-semibold hover:bg-red-50 rounded-xl flex items-center space-x-3 min-h-[48px] border-t border-slate-100"
+                  >
+                    <Trash2 className="w-5 h-5 text-red-500" />
+                    <span>Xóa thư mục</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

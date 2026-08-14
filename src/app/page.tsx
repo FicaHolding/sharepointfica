@@ -42,6 +42,9 @@ function SharePointContent() {
   const searchParams = useSearchParams();
   const supabase = createClient();
 
+  // Mobile Drawer State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Active Logged In User State (Dynamic Persistence)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'a1111111-1111-4111-8111-111111111111',
@@ -913,7 +916,7 @@ function SharePointContent() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="min-h-screen bg-slate-900 flex flex-col font-sans antialiased select-none relative"
+      className="min-h-screen bg-slate-900 flex flex-col font-sans antialiased select-none relative overflow-x-hidden"
     >
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
@@ -941,11 +944,12 @@ function SharePointContent() {
         }}
         onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
         onOpenProfile={() => setIsUserProfileModalOpen(true)}
+        onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
       />
 
       {/* Main Container */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
+        {/* Left Sidebar (Desktop Fixed & Mobile Slide-over Drawer) */}
         <Sidebar
           activeTab={activeTab}
           onTabChange={(tab) => {
@@ -964,10 +968,13 @@ function SharePointContent() {
           archivedCount={archivedClientsList.length}
           filterState={filterState}
           onFilterChange={(fs) => setFilterState((prev) => ({ ...prev, ...fs }))}
+          isMobileOpen={isMobileMenuOpen}
+          onCloseMobile={() => setIsMobileMenuOpen(false)}
+          onOpenFilterDrawer={() => setIsFilterDrawerOpen(true)}
         />
 
         {/* Right Main Content */}
-        <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between relative">
+        <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between relative pb-16 md:pb-0">
           <div>
             {/* Breadcrumb Navigation - Synced with URL */}
             <Breadcrumb
@@ -1000,9 +1007,9 @@ function SharePointContent() {
                 </div>
                 <button
                   onClick={() => selectedClient && handleRestoreClient(selectedClient)}
-                  className="bg-amber-200 hover:bg-amber-300 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded border border-amber-400 transition-colors"
+                  className="bg-amber-200 hover:bg-amber-300 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded border border-amber-400 transition-colors shrink-0 ml-2"
                 >
-                  Khôi phục Active (Restore)
+                  Khôi phục Active
                 </button>
               </div>
             )}
@@ -1026,30 +1033,30 @@ function SharePointContent() {
             />
 
             {/* Page Header */}
-            <div className="px-5 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
+            <div className="px-4 md:px-5 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h1 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                <h1 className="text-sm md:text-base font-bold text-slate-900 flex items-center space-x-2">
                   <span>
                     {selectedSubFolder
                       ? selectedSubFolder.name
                       : selectedClient
                       ? selectedClient.folder_name
                       : activeTab === 'archived_clients'
-                      ? 'Kho Lưu Trữ Hồ Sơ Khách Hàng (Archived Clients)'
+                      ? 'Kho Lưu Trữ Hồ Sơ Khách Hàng'
                       : activeTab === 'reports'
-                      ? 'Nhật Ký Hoạt Động & Kiểm Toán (Audit Stream)'
+                      ? 'Nhật Ký Hoạt Động & Kiểm Toán'
                       : activeTab === 'settings'
-                      ? 'Cài Đặt Hệ Thống & Quản Lý Người Dùng'
-                      : 'Danh Sách Khách Hàng (Active Clients)'}
+                      ? 'Cài Đặt Hệ Thống'
+                      : 'Danh Sách Khách Hàng'}
                   </span>
                   {filterState.serviceType !== 'all' && (
-                    <span className="text-xs bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded border border-blue-300">
-                      Lọc Dịch Vụ: {filterState.serviceType}
+                    <span className="text-[10px] md:text-xs bg-blue-100 text-blue-800 font-mono px-2 py-0.5 rounded border border-blue-300">
+                      Lọc: {filterState.serviceType}
                     </span>
                   )}
                 </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Đồng bộ thời gian thực Supabase Realtime Engine | Fica Holding Financial Workspace
+                <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Mobile Touch Optimized
                 </p>
               </div>
 
@@ -1062,11 +1069,11 @@ function SharePointContent() {
                   });
                   setIsDetailsPaneOpen(!isDetailsPaneOpen);
                 }}
-                className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors flex items-center space-x-1 text-xs font-semibold"
-                title="Thông tin chi tiết (Details Pane)"
+                className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors flex items-center space-x-1 text-xs font-semibold shrink-0 min-h-[44px]"
+                title="Thông tin chi tiết"
               >
                 <Info className="w-4 h-4 text-blue-600" />
-                <span>Details Info</span>
+                <span className="hidden sm:inline">Details</span>
               </button>
             </div>
 
@@ -1194,10 +1201,10 @@ function SharePointContent() {
           <footer className="px-4 py-2 bg-white border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between select-none">
             <div className="flex items-center space-x-2">
               <Activity className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
+              <span className="truncate">Bảo mật & Audit Trail Fica Holding</span>
             </div>
-            <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | URL Params Dynamic Sync Active
+            <div className="font-mono hidden sm:block">
+              Next.js 15 App Router | Mobile Responsive Certified
             </div>
           </footer>
         </main>
