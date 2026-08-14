@@ -33,7 +33,7 @@ import {
   UserRole,
   ServiceType,
 } from '@/types/sharepoint';
-import { Lock, Activity, Info, UploadCloud, Users, Settings } from 'lucide-react';
+import { Lock, Activity, Info, UploadCloud, Users, Settings, Filter, CheckCircle2 } from 'lucide-react';
 import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
 
@@ -172,7 +172,77 @@ function SharePointContent() {
     },
   ];
 
-  // BUG 2 FIX: SYNC ROUTING STATE WITH URL QUERY PARAMS FOR F5 PERSISTENCE
+  // Helper to Update URL without breaking browser history
+  const updateUrlState = (
+    clientId?: string | null,
+    folderId?: string | null,
+    tabName?: string | null,
+    serviceType?: string | null,
+    fiscalYear?: string | null
+  ) => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams();
+
+    if (clientId) {
+      params.set('client', clientId);
+    }
+
+    if (folderId && clientId) {
+      params.set('folder', folderId);
+    }
+
+    if (tabName && tabName !== 'active_clients') {
+      params.set('tab', tabName);
+    }
+
+    const activeService = serviceType !== undefined ? serviceType : filterState.serviceType;
+    if (activeService && activeService !== 'all') {
+      params.set('service', activeService);
+    }
+
+    const activeYear = fiscalYear !== undefined ? fiscalYear : filterState.fiscalYear;
+    if (activeYear && activeYear !== 'all') {
+      params.set('year', String(activeYear));
+    }
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `/?${queryString}` : '/';
+    window.history.replaceState(null, '', newUrl);
+  };
+
+  // CENTRALIZED FILTER CHANGE HANDLER (OPTION A: Auto-navigate back to Client List if Client Service doesn't match new filter)
+  const handleFilterChange = (newFilters: Partial<MetadataFilterState>) => {
+    const updatedFilterState = { ...filterState, ...newFilters };
+    setFilterState(updatedFilterState);
+
+    const targetService = updatedFilterState.serviceType;
+    const targetYear = updatedFilterState.fiscalYear;
+
+    // Option A: If currently inside a client or subfolder whose service_type does NOT match the selected service filter
+    if (selectedClient && targetService !== 'all' && (selectedClient.service_type || 'CFO') !== targetService) {
+      const prevClientName = selectedClient.folder_name;
+      const prevService = selectedClient.service_type || 'CFO';
+
+      // Auto-navigate back to Client List
+      setSelectedClient(null);
+      setSelectedSubFolder(null);
+      setSelectedClientIds([]);
+      setSelectedFileIds([]);
+
+      updateUrlState(null, null, activeTab, targetService, targetYear);
+
+      addToast(
+        'info',
+        `Tự động chuyển về Danh sách Khách hàng [${targetService}]`,
+        `Hồ sơ ${prevClientName} thuộc nhóm ${prevService}, không thuộc bộ lọc ${targetService} vừa chọn.`
+      );
+    } else {
+      updateUrlState(selectedClient?.id, selectedSubFolder?.id, activeTab, targetService, targetYear);
+    }
+  };
+
+  // SYNC ROUTING STATE WITH URL QUERY PARAMS FOR F5 PERSISTENCE & FILTER VALIDATION
   useEffect(() => {
     const urlClientParam = searchParams.get('client');
     const urlFolderParam = searchParams.get('folder');
@@ -184,20 +254,6 @@ function SharePointContent() {
       setActiveTab(urlTabParam);
     }
 
-    if (urlClientParam) {
-      const matchedClient = clients.find((c) => c.id === urlClientParam);
-      if (matchedClient) {
-        setSelectedClient(matchedClient);
-        if (urlFolderParam) {
-          const subFolders = createSubfoldersForClient(matchedClient.id);
-          const matchedFolder = subFolders.find((sf) => sf.id === urlFolderParam);
-          if (matchedFolder) {
-            setSelectedSubFolder(matchedFolder);
-          }
-        }
-      }
-    }
-
     if (urlServiceParam || urlYearParam) {
       setFilterState((prev) => ({
         ...prev,
@@ -205,36 +261,29 @@ function SharePointContent() {
         fiscalYear: urlYearParam ? String(urlYearParam) : prev.fiscalYear,
       }));
     }
+
+    if (urlClientParam) {
+      const matchedClient = clients.find((c) => c.id === urlClientParam);
+      if (matchedClient) {
+        // Validate if matched client service matches active service filter
+        if (urlServiceParam && urlServiceParam !== 'all' && (matchedClient.service_type || 'CFO') !== urlServiceParam) {
+          // If mismatch, reset client and stay at client list with filter applied
+          setSelectedClient(null);
+          setSelectedSubFolder(null);
+          updateUrlState(null, null, urlTabParam, urlServiceParam, urlYearParam);
+        } else {
+          setSelectedClient(matchedClient);
+          if (urlFolderParam) {
+            const subFolders = createSubfoldersForClient(matchedClient.id);
+            const matchedFolder = subFolders.find((sf) => sf.id === urlFolderParam);
+            if (matchedFolder) {
+              setSelectedSubFolder(matchedFolder);
+            }
+          }
+        }
+      }
+    }
   }, [searchParams, clients]);
-
-  // Helper to Update URL without breaking browser history
-  const updateUrlState = (clientId?: string | null, folderId?: string | null, tabName?: string | null) => {
-    if (typeof window === 'undefined') return;
-
-    const params = new URLSearchParams(window.location.search);
-
-    if (clientId) {
-      params.set('client', clientId);
-    } else {
-      params.delete('client');
-    }
-
-    if (folderId) {
-      params.set('folder', folderId);
-    } else {
-      params.delete('folder');
-    }
-
-    if (tabName && tabName !== 'active_clients') {
-      params.set('tab', tabName);
-    } else {
-      params.delete('tab');
-    }
-
-    const queryString = params.toString();
-    const newUrl = queryString ? `/?${queryString}` : '/';
-    window.history.replaceState(null, '', newUrl);
-  };
 
   // Load Real Supabase Database Clients & User Profiles on Mount
   useEffect(() => {
@@ -934,7 +983,7 @@ function SharePointContent() {
       <Topbar
         currentUser={currentUser}
         searchQuery={globalSearchQuery}
-        onSearchChange={setGlobalSearchQuery}
+        onSearchChange={(q) => handleFilterChange({ searchQuery: q })}
         onRoleSwitch={(r) => {
           const updated = { ...currentUser, role: r };
           setCurrentUser(updated);
@@ -967,7 +1016,7 @@ function SharePointContent() {
           activeCount={activeClientsList.length}
           archivedCount={archivedClientsList.length}
           filterState={filterState}
-          onFilterChange={(fs) => setFilterState((prev) => ({ ...prev, ...fs }))}
+          onFilterChange={handleFilterChange}
           isMobileOpen={isMobileMenuOpen}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
           onOpenFilterDrawer={() => setIsFilterDrawerOpen(true)}
@@ -996,6 +1045,24 @@ function SharePointContent() {
               }}
             />
 
+            {/* Service Type Active Filter Information Banner (Option A Notification) */}
+            {filterState.serviceType !== 'all' && !selectedClient && (
+              <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-900 flex items-center justify-between animate-fade-in shadow-inner">
+                <div className="flex items-center space-x-2 font-medium">
+                  <Filter className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>
+                    Đang lọc Danh sách Khách hàng thuộc Loại dịch vụ: <strong>{filterState.serviceType}</strong> ({displayedClients.length} khách hàng).
+                  </span>
+                </div>
+                <button
+                  onClick={() => handleFilterChange({ serviceType: 'all' })}
+                  className="bg-blue-100 hover:bg-blue-200 text-blue-800 text-[11px] font-bold px-2.5 py-1 rounded border border-blue-300 transition-colors shrink-0 ml-2"
+                >
+                  Bỏ lọc dịch vụ (Hiện tất cả)
+                </button>
+              </div>
+            )}
+
             {/* Read-Only Banner for Archived Clients */}
             {isReadOnly && (
               <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 text-xs text-amber-900 flex items-center justify-between animate-fade-in shadow-inner">
@@ -1022,7 +1089,7 @@ function SharePointContent() {
               onOpenUploadModal={() => setIsUploadModalOpen(true)}
               onOpenFilterDrawer={() => setIsFilterDrawerOpen(true)}
               filterState={filterState}
-              onSearchChange={(q) => setFilterState((prev) => ({ ...prev, searchQuery: q }))}
+              onSearchChange={(q) => handleFilterChange({ searchQuery: q })}
               isReadOnly={isReadOnly}
               userRole={currentUser.role}
               selectedClientName={selectedClient?.folder_name}
@@ -1056,7 +1123,7 @@ function SharePointContent() {
                   )}
                 </h1>
                 <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
-                  Đồng bộ thời gian thực Supabase Realtime Engine | Mobile Touch Optimized
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Dynamic Service Filtering Active
                 </p>
               </div>
 
@@ -1204,7 +1271,7 @@ function SharePointContent() {
               <span className="truncate">Bảo mật & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono hidden sm:block">
-              Next.js 15 App Router | Mobile Responsive Certified
+              Next.js 15 App Router | Service Filter Dynamic Routing Active
             </div>
           </footer>
         </main>
@@ -1320,9 +1387,9 @@ function SharePointContent() {
         isOpen={isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
         filterState={filterState}
-        onFilterChange={(fs) => setFilterState((prev) => ({ ...prev, ...fs }))}
+        onFilterChange={handleFilterChange}
         onResetFilters={() =>
-          setFilterState({
+          handleFilterChange({
             searchQuery: '',
             fiscalYear: 'all',
             serviceType: 'all',
