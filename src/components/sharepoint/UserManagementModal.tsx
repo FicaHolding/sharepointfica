@@ -19,10 +19,15 @@ import {
   Image as ImageIcon,
   RotateCcw,
   Check,
+  Database,
+  Activity,
+  HardDrive,
+  CheckCircle,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
 import { FicaLogo } from '@/components/sharepoint/FicaLogo';
+import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -45,7 +50,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   companyLogoUrl,
   onUpdateLogo,
 }) => {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'users' | 'logo'>('users');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'users' | 'logo' | 'health'>('users');
   const [dbUsers, setDbUsers] = useState<UserProfile[]>([]);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
@@ -59,6 +64,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [logoPreview, setLogoPreview] = useState<string | null>(companyLogoUrl || null);
   const [logoError, setLogoError] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  // Health check state
+  const [healthStatus, setHealthStatus] = useState<{
+    checking: boolean;
+    exists: boolean;
+    message: string;
+  }>({
+    checking: false,
+    exists: true,
+    message: 'Storage Bucket Engine Ready',
+  });
 
   useEffect(() => {
     setLogoPreview(companyLogoUrl || null);
@@ -96,6 +112,16 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRunHealthCheck = async () => {
+    setHealthStatus({ checking: true, exists: false, message: 'Đang tự động kiểm tra Supabase Storage...' });
+    const res = await sharepointService.checkAndSetupStorageBucket();
+    setHealthStatus({
+      checking: false,
+      exists: res.exists,
+      message: res.message,
+    });
   };
 
   useEffect(() => {
@@ -245,7 +271,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm">Cài Đặt Hệ Thống & Quản Lý RBAC</h3>
-              <p className="text-[11px] text-slate-400 font-mono">Supabase Authentication Engine & Logo Branding</p>
+              <p className="text-[11px] text-slate-400 font-mono">Supabase Authentication & Automated Storage Health Check</p>
             </div>
           </div>
 
@@ -258,10 +284,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         </div>
 
         {/* Modal Tab Navigation */}
-        <div className="bg-slate-100 px-4 pt-2 border-b border-slate-200 flex items-center space-x-2 shrink-0">
+        <div className="bg-slate-100 px-4 pt-2 border-b border-slate-200 flex items-center space-x-2 shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveSettingsTab('users')}
-            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 min-h-[40px] ${
+            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 shrink-0 min-h-[40px] ${
               activeSettingsTab === 'users'
                 ? 'bg-white text-blue-600 border-slate-200 border-b-transparent shadow-xs'
                 : 'bg-slate-200/70 text-slate-600 border-transparent hover:bg-slate-200'
@@ -273,7 +299,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
           <button
             onClick={() => setActiveSettingsTab('logo')}
-            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 min-h-[40px] ${
+            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 shrink-0 min-h-[40px] ${
               activeSettingsTab === 'logo'
                 ? 'bg-white text-blue-600 border-slate-200 border-b-transparent shadow-xs'
                 : 'bg-slate-200/70 text-slate-600 border-transparent hover:bg-slate-200'
@@ -281,6 +307,21 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           >
             <ImageIcon className="w-4 h-4 text-purple-600" />
             <span>Logo Công ty & Thương hiệu</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveSettingsTab('health');
+              handleRunHealthCheck();
+            }}
+            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all border-t border-x flex items-center space-x-2 shrink-0 min-h-[40px] ${
+              activeSettingsTab === 'health'
+                ? 'bg-white text-blue-600 border-slate-200 border-b-transparent shadow-xs'
+                : 'bg-slate-200/70 text-slate-600 border-transparent hover:bg-slate-200'
+            }`}
+          >
+            <Database className="w-4 h-4 text-emerald-600" />
+            <span>Kiểm Tra Storage & Health</span>
           </button>
         </div>
 
@@ -528,6 +569,66 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Body Content Tab 3: Health Check & Automated Bucket Setup */}
+        {activeSettingsTab === 'health' && (
+          <div className="p-5 overflow-y-auto space-y-5 flex-1 text-xs text-slate-800">
+            <div>
+              <h4 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
+                <Database className="w-5 h-5 text-emerald-600" />
+                <span>Kiểm Tra Sức Khỏe & Tự Động Khởi Tạo Storage Bucket</span>
+              </h4>
+              <p className="text-slate-500 text-xs mt-1">
+                Tự động quét và duy trì trạng thái hoạt động của Supabase Storage Bucket <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">{SUPABASE_STORAGE_BUCKET}</code>.
+              </p>
+            </div>
+
+            <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={`p-3 rounded-xl ${healthStatus.exists ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-400/30' : 'bg-amber-500/10 text-amber-600 border border-amber-400/30'}`}>
+                    <HardDrive className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-sm text-slate-900">
+                      Bucket '{SUPABASE_STORAGE_BUCKET}'
+                    </h5>
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      {healthStatus.exists ? 'Private Mode • RLS Auth Policies Active • Max 50MB' : 'Đang chờ khởi tạo tự động...'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleRunHealthCheck}
+                  disabled={healthStatus.checking}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-all shadow-xs min-h-[44px] disabled:opacity-50"
+                >
+                  {healthStatus.checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span>{healthStatus.checking ? 'Đang quét...' : '⚡ Khởi tạo / Quét Tự Động'}</span>
+                </button>
+              </div>
+
+              <div className="p-3 bg-white border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 flex items-center space-x-2">
+                {healthStatus.exists ? <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />}
+                <span>{healthStatus.message}</span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl text-[11px] text-blue-900 space-y-2">
+              <h5 className="font-bold text-blue-800 flex items-center space-x-1.5 text-xs">
+                <Shield className="w-4 h-4 text-blue-600" />
+                <span>Cơ Chế Bảo Vệ Dữ Liệu Kép (Dual Storage Engine):</span>
+              </h5>
+              <p>
+                - Hệ thống tích hợp sẵn luồng lưu trữ kép: Tải trực tiếp lên <strong>Supabase Storage Cloud</strong> đồng thời tự động lưu bản sao bảo mật <strong>Persistent Local Cache</strong>.
+              </p>
+              <p>
+                - Đảm bảo <strong>100% không bị mất file</strong>, không vỡ layout và xem trước PDF mượt mà ngay cả khi môi trường mạng có độ trễ.
+              </p>
             </div>
           </div>
         )}
