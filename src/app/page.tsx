@@ -198,8 +198,8 @@ function SharePointContent() {
     if (urlServiceParam || urlYearParam) {
       setFilterState((prev) => ({
         ...prev,
-        serviceType: (urlServiceParam as ServiceType) || prev.serviceType,
-        fiscalYear: urlYearParam ? Number(urlYearParam) : prev.fiscalYear,
+        serviceType: urlServiceParam || prev.serviceType,
+        fiscalYear: urlYearParam ? String(urlYearParam) : prev.fiscalYear,
       }));
     }
   }, [searchParams, clients]);
@@ -417,7 +417,6 @@ function SharePointContent() {
   // Load files from both Supabase DB and LocalStorage on Mount / Selection Change
   useEffect(() => {
     async function loadRealFiles() {
-      // 1. Check LocalStorage Uploaded Files First
       let localFiles: DocumentFile[] = [];
       if (typeof window !== 'undefined') {
         const storedDocs = localStorage.getItem('fica_uploaded_documents');
@@ -430,7 +429,6 @@ function SharePointContent() {
         }
       }
 
-      // 2. Fetch from Supabase Database `documents` table
       try {
         const dbFiles = await sharepointService.fetchFiles(selectedClient?.id, selectedSubFolder?.id);
         setFiles((prev) => {
@@ -702,7 +700,6 @@ function SharePointContent() {
       modified_by_name: currentUser.full_name,
     };
 
-    // Save to local state and LocalStorage for immediate persistence across reloads
     setFiles((prev) => {
       const updated = [newFile, ...prev];
       if (typeof window !== 'undefined') {
@@ -895,7 +892,7 @@ function SharePointContent() {
     }
 
     if (filterState.fiscalYear !== 'all') {
-      list = list.filter((f) => f.fiscal_year === Number(filterState.fiscalYear));
+      list = list.filter((f) => String(f.fiscal_year) === String(filterState.fiscalYear));
     }
     if (filterState.serviceType !== 'all') {
       list = list.filter((f) => f.service_type === filterState.serviceType);
