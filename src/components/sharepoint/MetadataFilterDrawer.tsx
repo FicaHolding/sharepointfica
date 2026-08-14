@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { X, Filter, RotateCcw, Check, Calendar, Briefcase, ShieldCheck, Tag } from 'lucide-react';
+import { X, Filter, RotateCcw, Check, Briefcase, ShieldCheck, Tag } from 'lucide-react';
 import { MetadataFilterState } from '@/types/sharepoint';
 
 interface MetadataFilterDrawerProps {
@@ -52,29 +52,6 @@ export const MetadataFilterDrawer: React.FC<MetadataFilterDrawerProps> = ({
 
         {/* Content Body */}
         <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-6 text-xs text-slate-800">
-          {/* Fiscal Year */}
-          <div>
-            <label className="font-bold text-slate-900 mb-2 flex items-center space-x-1.5 text-xs">
-              <Calendar className="w-4 h-4 text-blue-600" />
-              <span>Năm tài chính (Fiscal Year)</span>
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {['all', '2025', '2024', '2023'].map((yr) => (
-                <button
-                  key={yr}
-                  onClick={() => onFilterChange({ fiscalYear: yr })}
-                  className={`py-2.5 rounded-xl border font-mono text-center font-bold text-xs transition-all min-h-[44px] ${
-                    filterState.fiscalYear === yr
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  {yr === 'all' ? 'Tất cả' : yr}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Service Type */}
           <div>
             <label className="font-bold text-slate-900 mb-2 flex items-center space-x-1.5 text-xs">

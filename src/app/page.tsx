@@ -122,7 +122,7 @@ function SharePointContent() {
   const [selectedClient, setSelectedClient] = useState<ClientFolder | null>(null);
   const [selectedSubFolder, setSelectedSubFolder] = useState<FolderItem | null>(null);
 
-  // Search & Metadata Filter State (Synced with URL)
+  // Search & Metadata Filter State (Synced with URL - Service Type Primary)
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [filterState, setFilterState] = useState<MetadataFilterState>({
     searchQuery: '',
@@ -172,13 +172,12 @@ function SharePointContent() {
     },
   ];
 
-  // Helper to Update URL without breaking browser history
+  // Helper to Update URL without breaking browser history (Clean Service-only query params)
   const updateUrlState = (
     clientId?: string | null,
     folderId?: string | null,
     tabName?: string | null,
-    serviceType?: string | null,
-    fiscalYear?: string | null
+    serviceType?: string | null
   ) => {
     if (typeof window === 'undefined') return;
 
@@ -201,23 +200,17 @@ function SharePointContent() {
       params.set('service', activeService);
     }
 
-    const activeYear = fiscalYear !== undefined ? fiscalYear : filterState.fiscalYear;
-    if (activeYear && activeYear !== 'all') {
-      params.set('year', String(activeYear));
-    }
-
     const queryString = params.toString();
     const newUrl = queryString ? `/?${queryString}` : '/';
     window.history.replaceState(null, '', newUrl);
   };
 
-  // CENTRALIZED FILTER CHANGE HANDLER (OPTION A: Auto-navigate back to Client List if Client Service doesn't match new filter)
+  // CENTRALIZED SERVICE TYPE FILTER CHANGE HANDLER
   const handleFilterChange = (newFilters: Partial<MetadataFilterState>) => {
     const updatedFilterState = { ...filterState, ...newFilters };
     setFilterState(updatedFilterState);
 
     const targetService = updatedFilterState.serviceType;
-    const targetYear = updatedFilterState.fiscalYear;
 
     // Option A: If currently inside a client or subfolder whose service_type does NOT match the selected service filter
     if (selectedClient && targetService !== 'all' && (selectedClient.service_type || 'CFO') !== targetService) {
@@ -230,7 +223,7 @@ function SharePointContent() {
       setSelectedClientIds([]);
       setSelectedFileIds([]);
 
-      updateUrlState(null, null, activeTab, targetService, targetYear);
+      updateUrlState(null, null, activeTab, targetService);
 
       addToast(
         'info',
@@ -238,7 +231,7 @@ function SharePointContent() {
         `Hồ sơ ${prevClientName} thuộc nhóm ${prevService}, không thuộc bộ lọc ${targetService} vừa chọn.`
       );
     } else {
-      updateUrlState(selectedClient?.id, selectedSubFolder?.id, activeTab, targetService, targetYear);
+      updateUrlState(selectedClient?.id, selectedSubFolder?.id, activeTab, targetService);
     }
   };
 
@@ -248,17 +241,15 @@ function SharePointContent() {
     const urlFolderParam = searchParams.get('folder');
     const urlTabParam = searchParams.get('tab') as ActiveNavTab | null;
     const urlServiceParam = searchParams.get('service');
-    const urlYearParam = searchParams.get('year');
 
     if (urlTabParam && ['active_clients', 'archived_clients', 'reports', 'settings'].includes(urlTabParam)) {
       setActiveTab(urlTabParam);
     }
 
-    if (urlServiceParam || urlYearParam) {
+    if (urlServiceParam) {
       setFilterState((prev) => ({
         ...prev,
-        serviceType: urlServiceParam || prev.serviceType,
-        fiscalYear: urlYearParam ? String(urlYearParam) : prev.fiscalYear,
+        serviceType: urlServiceParam,
       }));
     }
 
@@ -267,10 +258,9 @@ function SharePointContent() {
       if (matchedClient) {
         // Validate if matched client service matches active service filter
         if (urlServiceParam && urlServiceParam !== 'all' && (matchedClient.service_type || 'CFO') !== urlServiceParam) {
-          // If mismatch, reset client and stay at client list with filter applied
           setSelectedClient(null);
           setSelectedSubFolder(null);
-          updateUrlState(null, null, urlTabParam, urlServiceParam, urlYearParam);
+          updateUrlState(null, null, urlTabParam, urlServiceParam);
         } else {
           setSelectedClient(matchedClient);
           if (urlFolderParam) {
@@ -405,7 +395,7 @@ function SharePointContent() {
   // Drag and Drop Zone State
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  // BUG 1 FIX: DYNAMIC FILE PERSISTENCE (Supabase DB + LocalStorage Fallback)
+  // DYNAMIC FILE PERSISTENCE (Supabase DB + LocalStorage Fallback)
   const [files, setFiles] = useState<DocumentFile[]>([
     {
       id: 'f1111111-1111-4111-8111-111111111111',
@@ -515,7 +505,7 @@ function SharePointContent() {
       client_name: '[KH001] - Tập đoàn SunGroup',
       file_name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
       action_type: 'UPLOAD_FILE',
-      action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm tài chính 2025',
+      action_details: 'Tải lên tài liệu Hợp đồng tư vấn CFO năm 2025',
       performed_by: 'a1111111-1111-4111-8111-111111111111',
       performed_by_name: 'Quản trị viên Fica',
       performed_by_role: 'admin',
@@ -706,7 +696,7 @@ function SharePointContent() {
     addToast('success', 'Đã khôi phục trạng thái Active!', `Folder: ${client.folder_name}`);
   };
 
-  // BUG 1 FIX: REAL SUPABASE STORAGE & DATABASE FILE UPLOAD WITH LOCALSTORAGE INSTANT FALLBACK
+  // REAL SUPABASE STORAGE & DATABASE FILE UPLOAD WITH LOCALSTORAGE INSTANT FALLBACK
   const handleUploadFile = async (data: {
     name: string;
     file: File | null;
@@ -770,7 +760,7 @@ function SharePointContent() {
 
     pushAuditLog(
       'UPLOAD_FILE',
-      `Tải lên file ${data.name} (Năm ${data.fiscalYear}, Dịch vụ ${data.serviceType})`,
+      `Tải lên file ${data.name} (Dịch vụ ${data.serviceType})`,
       data.name
     );
     addToast('success', 'Đã lưu vĩnh viễn vào Supabase Storage & CSDL!', `File: ${data.name}`);
@@ -943,9 +933,6 @@ function SharePointContent() {
       );
     }
 
-    if (filterState.fiscalYear !== 'all') {
-      list = list.filter((f) => String(f.fiscal_year) === String(filterState.fiscalYear));
-    }
     if (filterState.serviceType !== 'all') {
       list = list.filter((f) => f.service_type === filterState.serviceType);
     }
@@ -1045,7 +1032,7 @@ function SharePointContent() {
               }}
             />
 
-            {/* Service Type Active Filter Information Banner (Option A Notification) */}
+            {/* Service Type Active Filter Information Banner */}
             {filterState.serviceType !== 'all' && !selectedClient && (
               <div className="bg-blue-50 border-b border-blue-200 px-4 py-2 text-xs text-blue-900 flex items-center justify-between animate-fade-in shadow-inner">
                 <div className="flex items-center space-x-2 font-medium">
@@ -1123,7 +1110,7 @@ function SharePointContent() {
                   )}
                 </h1>
                 <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
-                  Đồng bộ thời gian thực Supabase Realtime Engine | Dynamic Service Filtering Active
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Bộ Lọc Loại Dịch Vụ
                 </p>
               </div>
 
@@ -1391,7 +1378,6 @@ function SharePointContent() {
         onResetFilters={() =>
           handleFilterChange({
             searchQuery: '',
-            fiscalYear: 'all',
             serviceType: 'all',
             status: 'all',
             selectedTags: [],

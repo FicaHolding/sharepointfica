@@ -139,17 +139,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
-        {/* Quick Filter presets */}
+        {/* Quick Filter presets - ONLY Service Type Filter */}
         <div className="pt-2 border-t border-slate-800">
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
               <Filter className="w-3 h-3 text-slate-400" />
-              <span>Bộ lọc nhanh</span>
+              <span>Bộ lọc Loại dịch vụ</span>
             </span>
-            {(filterState.fiscalYear !== 'all' || filterState.serviceType !== 'all' || filterState.status !== 'all') && (
+            {(filterState.serviceType !== 'all' || filterState.status !== 'all') && (
               <button
-                onClick={() => onFilterChange({ fiscalYear: 'all', serviceType: 'all', status: 'all' })}
-                className="text-[10px] text-blue-400 hover:underline min-h-[30px] flex items-center"
+                onClick={() => onFilterChange({ serviceType: 'all', status: 'all' })}
+                className="text-[10px] text-blue-400 hover:underline min-h-[30px] flex items-center font-medium"
               >
                 Đặt lại
               </button>
@@ -157,37 +157,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="space-y-3 px-1 mt-1">
-            {/* Fiscal Year Filter */}
-            <div>
-              <label className="text-[11px] text-slate-400 block mb-1 font-medium">Năm tài chính:</label>
-              <div className="grid grid-cols-4 gap-1">
-                {['all', '2025', '2024', '2023'].map((yr) => (
-                  <button
-                    key={yr}
-                    onClick={() => onFilterChange({ fiscalYear: yr })}
-                    className={`py-1.5 text-[10px] font-mono rounded border text-center transition-all min-h-[36px] ${
-                      filterState.fiscalYear === yr
-                        ? 'bg-blue-600 border-blue-500 text-white font-bold'
-                        : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    {yr === 'all' ? 'Tất cả' : yr}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Service Type Filter */}
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1 font-medium">Loại dịch vụ:</label>
+              <label className="text-[11px] text-slate-400 block mb-1 font-medium">Nhóm dịch vụ:</label>
               <div className="flex flex-wrap gap-1">
                 {['all', 'Audit', 'CFO', 'Consulting', 'Tax'].map((st) => (
                   <button
                     key={st}
                     onClick={() => onFilterChange({ serviceType: st })}
-                    className={`px-2.5 py-1 text-[10px] rounded border transition-all min-h-[36px] ${
+                    className={`px-2.5 py-1 text-[10px] rounded-lg border transition-all min-h-[36px] ${
                       filterState.serviceType === st
-                        ? 'bg-indigo-600 border-indigo-500 text-white font-bold'
+                        ? 'bg-indigo-600 border-indigo-500 text-white font-bold shadow-xs'
                         : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:bg-slate-800'
                     }`}
                   >
@@ -224,74 +204,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Sidebar (Fixed Left Column) */}
-      <aside className="hidden md:flex w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex-col justify-between h-[calc(100vh-3.5rem)] shrink-0">
+      {/* Desktop Fixed Sidebar */}
+      <aside className="w-64 bg-[#0F172A] text-white border-r border-slate-800 hidden md:block shrink-0 h-[calc(100vh-56px)]">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Slide-over Drawer Overlay */}
+      {/* Mobile Navigation Drawer (Slide-over from Left) */}
       {isMobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
-          <div
-            onClick={onCloseMobile}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs"
-          />
-          <div className="relative w-4/5 max-w-xs bg-slate-900 text-slate-300 h-full border-r border-slate-800 shadow-2xl z-50">
+        <div className="fixed inset-0 z-50 md:hidden flex animate-fade-in select-none">
+          {/* Backdrop Overlay */}
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs" onClick={onCloseMobile} />
+
+          {/* Drawer Content */}
+          <div className="relative w-4/5 max-w-xs bg-[#0F172A] text-white h-full shadow-2xl z-10 border-r border-slate-800 flex flex-col">
             {sidebarContent}
           </div>
         </div>
       )}
 
-      {/* Mobile Bottom Navigation Bar (Sticky Touch Bar at bottom of screen) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0F172A] border-t border-slate-800 text-slate-300 flex items-center justify-around py-1.5 px-2 shadow-2xl">
+      {/* Mobile Bottom Navigation Bar (Fixed at bottom on phones) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0F172A] border-t border-slate-800 flex items-center justify-around py-1 px-2 select-none shadow-2xl">
         <button
           onClick={() => onTabChange('active_clients')}
-          className={`flex flex-col items-center justify-center min-w-[56px] min-h-[44px] rounded-lg transition-colors ${
-            activeTab === 'active_clients' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-white'
+          className={`flex flex-col items-center justify-center p-1.5 rounded-lg min-w-[54px] min-h-[44px] ${
+            activeTab === 'active_clients' ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <FolderKanban className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] leading-tight">Khách hàng</span>
+          <FolderKanban className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Khách hàng</span>
         </button>
 
         <button
           onClick={() => onTabChange('archived_clients')}
-          className={`flex flex-col items-center justify-center min-w-[56px] min-h-[44px] rounded-lg transition-colors ${
-            activeTab === 'archived_clients' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-white'
+          className={`flex flex-col items-center justify-center p-1.5 rounded-lg min-w-[54px] min-h-[44px] ${
+            activeTab === 'archived_clients' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Archive className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] leading-tight">Kho Lưu trữ</span>
+          <Archive className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Kho Archive</span>
         </button>
 
         <button
           onClick={() => onTabChange('reports')}
-          className={`flex flex-col items-center justify-center min-w-[56px] min-h-[44px] rounded-lg transition-colors ${
-            activeTab === 'reports' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-white'
+          className={`flex flex-col items-center justify-center p-1.5 rounded-lg min-w-[54px] min-h-[44px] ${
+            activeTab === 'reports' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <BarChart3 className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] leading-tight">Báo cáo</span>
+          <BarChart3 className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Báo cáo</span>
         </button>
 
         {onOpenFilterDrawer && (
           <button
             onClick={onOpenFilterDrawer}
-            className="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-emerald-400 hover:text-emerald-300 rounded-lg"
+            className="flex flex-col items-center justify-center p-1.5 text-indigo-400 hover:text-indigo-300 rounded-lg min-w-[54px] min-h-[44px]"
           >
-            <SlidersHorizontal className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] leading-tight">Bộ lọc</span>
+            <SlidersHorizontal className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5">Bộ lọc</span>
           </button>
         )}
 
         <button
           onClick={() => onTabChange('settings')}
-          className={`flex flex-col items-center justify-center min-w-[56px] min-h-[44px] rounded-lg transition-colors ${
-            activeTab === 'settings' ? 'text-slate-200 font-bold' : 'text-slate-400 hover:text-white'
+          className={`flex flex-col items-center justify-center p-1.5 rounded-lg min-w-[54px] min-h-[44px] ${
+            activeTab === 'settings' ? 'text-slate-200 font-bold' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Settings className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px] leading-tight">Cài đặt</span>
+          <Settings className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Cài đặt</span>
         </button>
       </nav>
     </>
