@@ -31,6 +31,7 @@ interface TopbarProps {
   onOpenUserManagement?: () => void;
   onOpenProfile?: () => void;
   onOpenMobileMenu?: () => void;
+  companyLogoUrl?: string | null;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -41,6 +42,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenUserManagement,
   onOpenProfile,
   onOpenMobileMenu,
+  companyLogoUrl,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showRoleSubMenu, setShowRoleSubMenu] = useState(false);
@@ -92,7 +94,7 @@ export const Topbar: React.FC<TopbarProps> = ({
 
   return (
     <header className="h-14 bg-[#0F172A] text-white flex items-center justify-between px-3 md:px-4 border-b border-slate-800 select-none z-30 sticky top-0 shadow-md">
-      {/* Left: Mobile Menu Trigger & Logo */}
+      {/* Left: Mobile Menu Trigger & Custom Company Logo */}
       <div className="flex items-center space-x-2 md:space-x-3 shrink-0">
         {/* Mobile Hamburger Drawer Trigger */}
         <button
@@ -112,7 +114,8 @@ export const Topbar: React.FC<TopbarProps> = ({
         </button>
 
         <div className="flex items-center space-x-2">
-          <FicaLogo className="w-7 h-7 md:w-8 md:h-8" />
+          {/* Fica Logo Component with Dynamic Custom Logo URL Support */}
+          <FicaLogo className="w-7 h-7 md:w-8 md:h-8" logoUrl={companyLogoUrl} />
           <div>
             <div className="flex items-center space-x-1.5 font-bold tracking-wide text-xs md:text-sm text-slate-100">
               <span>FICA HOLDING</span>
@@ -138,183 +141,178 @@ export const Topbar: React.FC<TopbarProps> = ({
             type="text"
             value={searchQuery || ''}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Tìm nhanh KH, File, Thẻ Tag..."
-            className="w-full bg-slate-900/90 text-xs md:text-sm text-slate-100 placeholder-slate-400 pl-10 pr-8 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all min-h-[44px]"
+            placeholder="Tìm kiếm tài liệu, thư mục khách hàng, mã hợp đồng..."
+            className="w-full bg-slate-800/80 text-xs text-white placeholder-slate-400 pl-10 pr-4 py-2 rounded-xl border border-slate-700/80 focus:outline-none focus:border-blue-500 focus:bg-slate-800 focus:ring-1 focus:ring-blue-500 transition-all font-sans"
           />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+        </div>
+
+        {/* Mobile Search Glass Button */}
+        <div className="sm:hidden flex justify-end">
+          <button
+            onClick={() => setShowMobileSearch(!showMobileSearch)}
+            className="p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            title="Tìm kiếm"
+          >
+            <Search className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* Right: Actions & User Menu */}
-      <div className="flex items-center space-x-1 md:space-x-2 shrink-0">
-        {/* Mobile Search Glass Button */}
-        <button
-          onClick={() => setShowMobileSearch(!showMobileSearch)}
-          title="Tìm kiếm"
-          className="sm:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
-        >
-          <Search className="w-5 h-5 text-blue-400" />
-        </button>
+      {/* Mobile Top Overlay Search Input */}
+      {showMobileSearch && (
+        <div className="absolute inset-x-0 top-0 h-14 bg-slate-900 border-b border-slate-800 px-3 flex items-center space-x-2 z-40 sm:hidden animate-fade-in">
+          <Search className="w-5 h-5 text-blue-400 shrink-0" />
+          <input
+            type="text"
+            value={searchQuery || ''}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Tìm kiếm tài liệu..."
+            autoFocus
+            className="flex-1 bg-transparent text-sm text-white focus:outline-none"
+          />
+          <button
+            onClick={() => setShowMobileSearch(false)}
+            className="p-2 text-slate-400 hover:text-white rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
 
+      {/* Right Controls & User Profile Dropdown */}
+      <div className="flex items-center space-x-1.5 md:space-x-2 shrink-0">
         <button
-          title="Thông báo hệ thống"
-          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg relative min-w-[44px] min-h-[44px] flex items-center justify-center"
+          title="Thông báo"
+          className="relative p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
-          <Bell className="w-4 h-4" />
+          <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-blue-500 rounded-full ring-2 ring-[#0F172A]" />
         </button>
 
         {userRole === 'admin' && onOpenUserManagement && (
           <button
             onClick={onOpenUserManagement}
-            title="Quản lý Người dùng"
-            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg min-w-[44px] min-h-[44px] flex items-center justify-center"
+            title="Quản lý Người dùng & RBAC"
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors hidden sm:flex min-w-[44px] min-h-[44px] items-center justify-center"
           >
-            <Users className="w-4 h-4 text-blue-400" />
+            <Users className="w-5 h-5 text-purple-400" />
           </button>
         )}
 
-        <div className="h-5 w-[1px] bg-slate-700 mx-0.5 md:mx-1 hidden xs:block" />
+        <button
+          title="Cài đặt hệ thống"
+          onClick={onOpenUserManagement}
+          className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors hidden sm:flex min-w-[44px] min-h-[44px] items-center justify-center"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
 
-        {/* User Profile Avatar & Dropdown */}
-        <div className="relative">
+        {/* User Profile Trigger Dropdown */}
+        <div className="relative ml-1">
           <button
             onClick={() => setShowUserDropdown(!showUserDropdown)}
-            className="flex items-center space-x-2 p-1 hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 min-w-[44px] min-h-[44px] justify-center"
+            className="flex items-center space-x-2 p-1.5 hover:bg-slate-800 rounded-xl transition-colors min-h-[44px]"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-inner ring-2 ring-blue-500/40">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-xs font-mono">
               {getInitials(userName)}
             </div>
-            <div className="text-left hidden lg:block">
-              <div className="text-xs font-bold text-slate-100 leading-tight flex items-center space-x-1.5">
-                <span className="truncate max-w-[120px]">{userName}</span>
-                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${getRoleBadgeColor(userRole)}`}>
-                  {userRole}
-                </span>
+            <div className="hidden lg:block text-left">
+              <div className="text-xs font-semibold leading-none truncate max-w-[120px]">
+                {userName}
               </div>
-              <p className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]">{userEmail}</p>
+              <div className="text-[10px] text-slate-400 capitalize mt-0.5 font-mono">
+                {userRole}
+              </div>
             </div>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden lg:block" />
+            <ChevronDown className="w-4 h-4 text-slate-400 hidden sm:block" />
           </button>
 
-          {/* Dropdown Menu */}
+          {/* User Profile Dropdown Menu */}
           {showUserDropdown && (
-            <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2 text-xs">
-              <div className="px-3.5 py-2.5 border-b border-slate-800 bg-slate-950/50">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
+            <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-50 text-xs animate-fade-in">
+              <div className="p-4 bg-slate-950 border-b border-slate-800">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-sm font-bold text-white shadow-sm font-mono">
                     {getInitials(userName)}
                   </div>
-                  <div className="overflow-hidden">
-                    <p className="font-bold text-white truncate text-xs">{userName}</p>
-                    <p className="text-[10px] text-slate-400 font-mono truncate">{userEmail}</p>
-                    <span className={`inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded mt-1 ${getRoleBadgeColor(userRole)}`}>
-                      Quyền: {userRole}
-                    </span>
+                  <div>
+                    <h4 className="font-bold text-white text-sm">{userName}</h4>
+                    <p className="text-[11px] text-slate-400 font-mono">{userEmail}</p>
+                    <div className="mt-1 flex items-center space-x-1.5">
+                      <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full ${getRoleBadgeColor(userRole)}`}>
+                        {userRole.toUpperCase()}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate max-w-[110px]">{userDept}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="py-1">
+              <div className="p-2 space-y-1">
                 {onOpenProfile && (
                   <button
                     onClick={() => {
                       setShowUserDropdown(false);
                       onOpenProfile();
                     }}
-                    className="w-full text-left px-3.5 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white flex items-center space-x-2 min-h-[44px]"
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center space-x-2 min-h-[44px]"
                   >
                     <User className="w-4 h-4 text-blue-400" />
                     <span>Hồ sơ cá nhân (My Profile)</span>
                   </button>
                 )}
 
-                <div className="relative">
+                {userRole === 'admin' && onOpenUserManagement && (
                   <button
-                    onClick={() => setShowRoleSubMenu(!showRoleSubMenu)}
-                    className="w-full text-left px-3.5 py-2.5 text-slate-300 hover:bg-slate-800 hover:text-white flex items-center justify-between min-h-[44px]"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      onOpenUserManagement();
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg flex items-center space-x-2 min-h-[44px]"
                   >
-                    <div className="flex items-center space-x-2">
-                      <UserCheck className="w-4 h-4 text-purple-400" />
-                      <span>Đổi Vai trò (Switch Role)</span>
-                    </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    <Users className="w-4 h-4 text-purple-400" />
+                    <span>Quản lý Người dùng & RBAC</span>
                   </button>
+                )}
 
-                  {showRoleSubMenu && (
-                    <div className="bg-slate-950 px-3 py-2 space-y-1.5 border-y border-slate-800">
-                      {[
-                        { r: 'admin' as UserRole, label: 'Quản trị viên (Admin)' },
-                        { r: 'manager' as UserRole, label: 'Trưởng phòng (Manager)' },
-                        { r: 'staff' as UserRole, label: 'Chuyên viên (Staff)' },
-                        { r: 'client' as UserRole, label: 'Khách hàng (Client Read-Only)' },
-                      ].map((item) => (
-                        <button
-                          key={item.r}
-                          onClick={() => {
-                            onRoleSwitch(item.r);
-                            setShowRoleSubMenu(false);
-                            setShowUserDropdown(false);
-                          }}
-                          className={`w-full text-left px-2.5 py-1.5 rounded text-[11px] flex items-center justify-between min-h-[36px] ${
-                            userRole === item.r ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-800'
-                          }`}
-                        >
-                          <span>{item.label}</span>
-                          {userRole === item.r && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                {/* Role Switching Submenu for Testing RBAC */}
+                <div className="pt-2 border-t border-slate-800">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-500 uppercase font-mono">
+                    Thử nghiệm Phân quyền (RBAC Switcher)
+                  </div>
+                  {(['admin', 'manager', 'staff', 'client'] as UserRole[]).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        onRoleSwitch(r);
+                        setShowUserDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs rounded-lg flex items-center justify-between min-h-[38px] ${
+                        userRole === r
+                          ? 'bg-blue-600/20 text-blue-400 font-bold'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="capitalize">{r} Mode</span>
+                      {userRole === r && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
+                    </button>
+                  ))}
                 </div>
-              </div>
 
-              <div className="border-t border-slate-800 pt-1">
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-3.5 py-2.5 text-red-400 hover:bg-red-500/10 flex items-center space-x-2 font-medium min-h-[44px]"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Đăng xuất tài khoản</span>
-                </button>
+                <div className="pt-2 border-t border-slate-800">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg flex items-center space-x-2 min-h-[44px]"
+                  >
+                    <LogOut className="w-4 h-4 text-red-400" />
+                    <span className="font-semibold">Đăng xuất (Logout)</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {/* Mobile Search Popover Overlay */}
-      {showMobileSearch && (
-        <div className="absolute top-14 left-0 right-0 bg-[#0F172A] border-b border-slate-800 p-3 z-40 sm:hidden animate-in slide-in-from-top-2 shadow-xl">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-blue-400" />
-            <input
-              type="text"
-              autoFocus
-              value={searchQuery || ''}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Nhập tên KH, Mã KH, Tên file hoặc Thẻ Tag..."
-              className="w-full bg-slate-900 text-slate-100 text-sm pl-9 pr-9 py-2.5 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 min-h-[44px]"
-            />
-            <button
-              onClick={() => {
-                setShowMobileSearch(false);
-                onSearchChange('');
-              }}
-              className="absolute right-2.5 top-2.5 p-1 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

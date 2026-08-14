@@ -113,7 +113,7 @@ export const sharepointService = {
     }
   },
 
-  // Create new client folder in Supabase Database with REAL PERSISTENCE, UUID & Support for ALL Service Types (Audit, CFO, Consulting, Tax)
+  // Create new client folder in Supabase Database
   async createClient(
     code: string,
     name: string,
@@ -152,7 +152,6 @@ export const sharepointService = {
           error.message.includes('schema cache') ||
           error.message.includes('Could not find')
         ) {
-          console.warn(`service_type column notice. Retrying insert for [${serviceType}]...`);
           const { data: retryData, error: retryError } = await supabase
             .from('clients')
             .insert([
@@ -212,7 +211,7 @@ export const sharepointService = {
     }
   },
 
-  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE, UUID & Support for ALL Service Types (Audit, CFO, Consulting, Tax)
+  // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE
   async renameClient(
     clientId: string,
     newCode: string,
@@ -223,7 +222,6 @@ export const sharepointService = {
     const folder_name = `[${newCode}] - ${newName}`;
 
     if (!isValidUUID(clientId)) {
-      console.warn('Client ID is non-UUID format:', clientId, 'Attempting upsert with valid UUID...');
       try {
         const updatePayload: any = {
           code: newCode,
@@ -277,13 +275,6 @@ export const sharepointService = {
           if (!retryError) return { success: true };
         }
 
-        if (error.message.includes("Could not find the table 'public.clients'")) {
-          return {
-            success: false,
-            error: "Bảng 'public.clients' chưa được tạo trên Supabase. Vui lòng copy đoạn mã SQL dán vào Supabase SQL Editor!",
-          };
-        }
-
         return { success: false, error: error.message };
       }
 
@@ -304,7 +295,7 @@ export const sharepointService = {
     }
   },
 
-  // Delete Client Folder (Permanent or Soft Archive)
+  // Delete Client Folder
   async deleteClient(clientId: string, mode: 'recycle' | 'permanent'): Promise<boolean> {
     try {
       if (mode === 'recycle') {
@@ -334,7 +325,7 @@ export const sharepointService = {
     }
   },
 
-  // Archive / Restore client (Locks or unlocks editing)
+  // Archive / Restore client
   async updateClientStatus(clientId: string, status: 'active' | 'archived', performedByName = 'Admin'): Promise<boolean> {
     try {
       if (!isValidUUID(clientId)) return true;
@@ -428,7 +419,7 @@ export const sharepointService = {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      // 1. Upload to Storage bucket using centralized constant
+      // Upload to Storage bucket using centralized constant
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
@@ -453,7 +444,6 @@ export const sharepointService = {
         created_at: new Date().toISOString(),
       };
 
-      // 2. Insert record into `documents` table
       const { data: docData, error: dbError } = await supabase
         .from('documents')
         .insert([payloadDoc])
@@ -506,7 +496,7 @@ export const sharepointService = {
         file_id: createdDoc.id,
         file_name: metadata.name,
         action_type: 'UPLOAD_FILE',
-        action_details: `Tải lên file ${metadata.name} (Năm ${metadata.fiscalYear}, Dịch vụ ${metadata.serviceType})`,
+        action_details: `Tải lên file ${metadata.name} (Dịch vụ ${metadata.serviceType})`,
         performed_by: isValidUUID(metadata.createdBy) ? metadata.createdBy : 'a1111111-1111-4111-8111-111111111111',
         performed_by_name: metadata.createdByName,
         performed_by_role: 'admin',
@@ -528,7 +518,6 @@ export const sharepointService = {
 
       const cleanPath = storagePath.replace(/^\/+/, '');
 
-      // 1. Try Signed URL (Works whether bucket is Private or Public)
       const { data: signedData, error: signedError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .createSignedUrl(cleanPath, 3600);
@@ -537,7 +526,6 @@ export const sharepointService = {
         return { url: signedData.signedUrl, isSigned: true };
       }
 
-      // 2. Fallback to Public URL
       const { data: publicData } = supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .getPublicUrl(cleanPath);
@@ -588,6 +576,66 @@ export const sharepointService = {
       console.error('Download blob exception:', err.message);
       return false;
     }
+  },
+
+  // Upload Company Logo to Supabase Storage with 2MB validation
+  async uploadCompanyLogo(file: File): Promise<{ success: boolean; logoUrl?: string; error?: string }> {
+    try {
+      if (file.size > 2 * 1024 * 1024) {
+        const mbSize = (file.size / (1024 * 1024)).toFixed(2);
+        return {
+          success: false,
+          error: `Dung lượng file logo (${mbSize} MB) vượt quá giới hạn tối đa 2MB. Vui lòng chọn file nhỏ hơn!`,
+        };
+      }
+
+      const fileExt = file.name.split('.').pop() || 'png';
+      const storagePath = `system_settings/company_logo_${Date.now()}.${fileExt}`;
+
+      const { error: storageError } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .upload(storagePath, file, { upsert: true });
+
+      if (storageError) {
+        console.warn('Storage logo upload notice:', storageError.message);
+      }
+
+      const res = await this.getFilePreviewOrDownloadUrl(storagePath);
+      let logoUrl = res.url;
+
+      if (!logoUrl) {
+        logoUrl = URL.createObjectURL(file);
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fica_company_logo', logoUrl);
+      }
+
+      await this.logAudit({
+        action_type: 'UPDATE_METADATA',
+        action_details: `Đã cập nhật Logo thương hiệu mới cho hệ thống (${file.name}, ${(file.size / 1024).toFixed(1)} KB)`,
+        performed_by_name: 'Admin',
+        performed_by_role: 'admin',
+      });
+
+      return { success: true, logoUrl };
+    } catch (err: any) {
+      console.error('Logo upload exception:', err.message);
+      return { success: false, error: err.message || 'Lỗi nạp file logo' };
+    }
+  },
+
+  // Reset/Remove Company Logo back to default
+  removeCompanyLogo() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fica_company_logo');
+    }
+    this.logAudit({
+      action_type: 'UPDATE_METADATA',
+      action_details: 'Đã xóa Logo tùy chỉnh và khôi phục về Logo Fica mặc định',
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
   },
 
   // Log Audit Action

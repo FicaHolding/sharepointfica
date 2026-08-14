@@ -1,15 +1,39 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface FicaLogoProps {
   className?: string;
   size?: number;
+  logoUrl?: string | null;
 }
 
-export const FicaLogo: React.FC<FicaLogoProps> = ({ className = 'w-8 h-8', size }) => {
+export const FicaLogo: React.FC<FicaLogoProps> = ({ className = 'w-8 h-8', size, logoUrl }) => {
+  const [imgError, setImgError] = useState(false);
   const style = size ? { width: `${size}px`, height: `${size}px` } : undefined;
 
+  useEffect(() => {
+    setImgError(false);
+  }, [logoUrl]);
+
+  // If a custom logo URL is uploaded and loads without error, render the uploaded logo image
+  if (logoUrl && !imgError) {
+    return (
+      <div
+        className={`relative flex items-center justify-center shrink-0 overflow-hidden rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm ${className}`}
+        style={style}
+      >
+        <img
+          src={logoUrl}
+          alt="Company Logo"
+          onError={() => setImgError(true)}
+          className="w-full h-full object-contain p-0.5"
+        />
+      </div>
+    );
+  }
+
+  // Fallback default Fica Logo SVG
   return (
     <div className={`relative flex items-center justify-center shrink-0 ${className}`} style={style}>
       <svg
@@ -28,15 +52,12 @@ export const FicaLogo: React.FC<FicaLogoProps> = ({ className = 'w-8 h-8', size 
             <stop offset="0%" stopColor="#0284C7" />
             <stop offset="100%" stopColor="#0369A1" />
           </linearGradient>
-          <filter id="fica-shadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000000" floodOpacity="0.25" />
-          </filter>
         </defs>
 
         {/* Outer Circular Coin Base */}
         <circle cx="250" cy="250" r="230" fill="url(#fica-blue-grad-1)" />
 
-        {/* 4 Overlapping Financial Petals / Swirl Lines */}
+        {/* 4 Overlapping Financial Petals */}
         <path
           d="M250 20 C350 20, 480 120, 480 250 C380 250, 250 350, 250 250 Z"
           fill="url(#fica-blue-grad-2)"
@@ -58,8 +79,8 @@ export const FicaLogo: React.FC<FicaLogoProps> = ({ className = 'w-8 h-8', size 
           opacity="0.85"
         />
 
-        {/* Center Square Cutout (Signature Fica Coin Element) */}
-        <rect x="175" y="175" width="150" height="150" fill="#FFFFFF" rx="4" />
+        {/* Center Diamond Sparkle */}
+        <polygon points="250,170 285,250 250,330 215,250" fill="#FFFFFF" opacity="0.95" />
       </svg>
     </div>
   );

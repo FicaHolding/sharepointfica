@@ -45,6 +45,18 @@ function SharePointContent() {
   // Mobile Drawer State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Dynamic Company Logo State
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedLogo = localStorage.getItem('fica_company_logo');
+      if (storedLogo) {
+        setCompanyLogoUrl(storedLogo);
+      }
+    }
+  }, []);
+
   // Active Logged In User State (Dynamic Persistence)
   const [currentUser, setCurrentUser] = useState<UserProfile>({
     id: 'a1111111-1111-4111-8111-111111111111',
@@ -212,12 +224,10 @@ function SharePointContent() {
 
     const targetService = updatedFilterState.serviceType;
 
-    // Option A: If currently inside a client or subfolder whose service_type does NOT match the selected service filter
     if (selectedClient && targetService !== 'all' && (selectedClient.service_type || 'CFO') !== targetService) {
       const prevClientName = selectedClient.folder_name;
       const prevService = selectedClient.service_type || 'CFO';
 
-      // Auto-navigate back to Client List
       setSelectedClient(null);
       setSelectedSubFolder(null);
       setSelectedClientIds([]);
@@ -256,7 +266,6 @@ function SharePointContent() {
     if (urlClientParam) {
       const matchedClient = clients.find((c) => c.id === urlClientParam);
       if (matchedClient) {
-        // Validate if matched client service matches active service filter
         if (urlServiceParam && urlServiceParam !== 'all' && (matchedClient.service_type || 'CFO') !== urlServiceParam) {
           setSelectedClient(null);
           setSelectedSubFolder(null);
@@ -966,7 +975,7 @@ function SharePointContent() {
         </div>
       )}
 
-      {/* SharePoint Topbar */}
+      {/* SharePoint Topbar with Custom Company Logo Support */}
       <Topbar
         currentUser={currentUser}
         searchQuery={globalSearchQuery}
@@ -981,6 +990,7 @@ function SharePointContent() {
         onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
         onOpenProfile={() => setIsUserProfileModalOpen(true)}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+        companyLogoUrl={companyLogoUrl}
       />
 
       {/* Main Container */}
@@ -1110,7 +1120,7 @@ function SharePointContent() {
                   )}
                 </h1>
                 <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
-                  Đồng bộ thời gian thực Supabase Realtime Engine | Bộ Lọc Loại Dịch Vụ
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Company Logo Customization Active
                 </p>
               </div>
 
@@ -1258,7 +1268,7 @@ function SharePointContent() {
               <span className="truncate">Bảo mật & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono hidden sm:block">
-              Next.js 15 App Router | Service Filter Dynamic Routing Active
+              Next.js 15 App Router | Custom Company Logo Active
             </div>
           </footer>
         </main>
@@ -1348,6 +1358,15 @@ function SharePointContent() {
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}
         currentUserRole={currentUser.role}
+        companyLogoUrl={companyLogoUrl}
+        onUpdateLogo={(newUrl) => {
+          setCompanyLogoUrl(newUrl);
+          if (newUrl) {
+            addToast('success', 'Đã lưu vĩnh viễn Logo thương hiệu công ty mới!');
+          } else {
+            addToast('info', 'Đã khôi phục về Logo FICA mặc định.');
+          }
+        }}
       />
 
       <NewClientModal
