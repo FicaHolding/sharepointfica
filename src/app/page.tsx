@@ -747,6 +747,17 @@ function SharePointContent() {
       return;
     }
 
+    // Ensure data.serviceType aligns with selectedClient service_type if unspecified
+    const effectiveServiceType = data.serviceType || selectedClient.service_type || 'CFO';
+
+    // Auto-adjust filterState if filter is active on a different service type so newly uploaded file is visible
+    if (filterState.serviceType !== 'all' && filterState.serviceType !== effectiveServiceType) {
+      setFilterState((prev) => ({
+        ...prev,
+        serviceType: 'all',
+      }));
+    }
+
     const folderId = selectedSubFolder
       ? selectedSubFolder.id
       : createSubfoldersForClient(selectedClient.id)[0].id;
@@ -755,7 +766,7 @@ function SharePointContent() {
     const res = await sharepointService.uploadFile(data.file, selectedClient.id, folderId, {
       name: data.name,
       fiscalYear: data.fiscalYear,
-      serviceType: data.serviceType,
+      serviceType: effectiveServiceType,
       status: data.status,
       tags: data.tags,
       createdBy: currentUser.id,
@@ -1414,6 +1425,10 @@ function SharePointContent() {
         onClose={() => setIsUploadModalOpen(false)}
         onUpload={handleUploadFile}
         isReadOnly={isReadOnly}
+        defaultServiceType={
+          selectedClient?.service_type ||
+          (filterState.serviceType !== 'all' ? (filterState.serviceType as ServiceType) : 'CFO')
+        }
         currentPathName={
           selectedSubFolder
             ? `${selectedClient?.folder_name} / ${selectedSubFolder.name}`
