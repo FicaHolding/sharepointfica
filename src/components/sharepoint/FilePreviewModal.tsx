@@ -87,13 +87,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isSpreadsheet = Boolean(file.name.match(/\.(xlsx|xls|csv)$/i)) || (file.mime_type && (file.mime_type.includes('spreadsheet') || file.mime_type.includes('excel')));
   const isDoc = Boolean(file.name.match(/\.(docx|doc|txt)$/i));
 
-  const isPublicHttpUrl = Boolean(
-    fileUrl &&
-      (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) &&
-      !fileUrl.startsWith('data:') &&
-      !fileUrl.startsWith('blob:')
-  );
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -151,7 +144,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           </div>
 
-          {/* Middle: Zoom & View Controls */}
+          {/* Middle: Zoom & View Controls for Images/PDFs */}
           <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
             <button
               onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
@@ -270,14 +263,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
               />
             </div>
-          ) : (isDoc || isSpreadsheet) && isPublicHttpUrl ? (
-            <iframe
-              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl!)}`}
-              className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
-              title={file.name}
-            />
           ) : (
-            /* Elegant Document Preview Card */
+            /* Native Premium Document Viewer Card (Zero iframe domain restrictions) */
             <div className="text-center p-8 bg-slate-900/90 rounded-2xl border border-slate-800 max-w-md text-slate-200 text-xs space-y-4 shadow-2xl my-auto animate-fade-in">
               <div className="p-4 bg-blue-500/10 rounded-2xl w-16 h-16 mx-auto flex items-center justify-center text-blue-400 border border-blue-500/20">
                 {isSpreadsheet ? <FileSpreadsheet className="w-8 h-8 text-emerald-400" /> : <FileText className="w-8 h-8 text-blue-400" />}
@@ -314,7 +301,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold transition-all text-xs min-h-[44px] flex items-center space-x-1.5"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    <span>Mở trực tiếp</span>
+                    <span>Mở trong tab mới</span>
                   </a>
                 )}
               </div>
