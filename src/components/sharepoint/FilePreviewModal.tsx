@@ -60,21 +60,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       try {
         await sharepointService.ensureBucketExists();
 
-        // Get Signed URL for Private Storage Bucket (3600s TTL)
+        // Get URL via Signed URL or Persistent Local Blob Cache
         const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
 
         if (res.url) {
-          try {
-            const headCheck = await fetch(res.url, { method: 'HEAD' });
-            if (!headCheck.ok) {
-              setHasStorageError(true);
-              setErrorMessage('File vật lý chưa có trên Supabase Storage (Record Metadata đã sẵn sàng). Vui lòng chọn Tải lên lại file.');
-            } else {
-              setFileUrl(res.url);
-            }
-          } catch {
-            setFileUrl(res.url);
-          }
+          setFileUrl(res.url);
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa từng được tải lên Storage.');
@@ -95,6 +85,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isPdf = file.name.toLowerCase().endsWith('.pdf') || (file.mime_type && file.mime_type.includes('pdf'));
   const isImage = (file.mime_type && file.mime_type.includes('image')) || Boolean(file.name.match(/\.(jpg|jpeg|png|webp|svg|gif)$/i));
   const isSpreadsheet = Boolean(file.name.match(/\.(xlsx|xls|csv)$/i)) || (file.mime_type && (file.mime_type.includes('spreadsheet') || file.mime_type.includes('excel')));
+  const isDoc = Boolean(file.name.match(/\.(docx|doc|txt)$/i));
+
+  const isPublicHttpUrl = Boolean(
+    fileUrl &&
+      (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) &&
+      !fileUrl.startsWith('data:') &&
+      !fileUrl.startsWith('blob:')
+  );
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -126,7 +124,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 select-none animate-fade-in">
       <div className="w-full max-w-5xl h-[90vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
         {/* Header Toolbar */}
-        <div className="h-14 px-4 sm:px-5 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800">
+        <div className="h-14 px-4 sm:px-5 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           {/* Left: File metadata */}
           <div className="flex items-center space-x-2.5 min-w-0">
             <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-400/30 shrink-0">
@@ -272,23 +270,54 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
               />
             </div>
-          ) : fileUrl ? (
+          ) : (isDoc || isSpreadsheet) && isPublicHttpUrl ? (
             <iframe
-              src={`https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`}
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl!)}`}
               className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
               title={file.name}
             />
           ) : (
-            <div className="text-center p-8 bg-slate-900 rounded-2xl border border-slate-800 max-w-md text-slate-400 text-xs space-y-3">
-              <FileText className="w-12 h-12 text-blue-400 mx-auto" />
-              <h4 className="font-bold text-sm text-slate-200">{file.name}</h4>
-              <p>Chế độ xem trực tiếp không hỗ trợ định dạng này. Vui lòng bấm "Tải file gốc" bên trên để xem chi tiết.</p>
-              <button
-                onClick={handleRealDownload}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-colors min-h-[44px]"
-              >
-                Tải xuống File ngay
-              </button>
+            /* Elegant Document Preview Card */
+            <div className="text-center p-8 bg-slate-900/90 rounded-2xl border border-slate-800 max-w-md text-slate-200 text-xs space-y-4 shadow-2xl my-auto animate-fade-in">
+              <div className="p-4 bg-blue-500/10 rounded-2xl w-16 h-16 mx-auto flex items-center justify-center text-blue-400 border border-blue-500/20">
+                {isSpreadsheet ? <FileSpreadsheet className="w-8 h-8 text-emerald-400" /> : <FileText className="w-8 h-8 text-blue-400" />}
+              </div>
+
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-white">{file.name}</h4>
+                <p className="text-slate-400 text-xs font-mono">
+                  Dung lượng: {formatFileSize(file.file_size)} • {file.service_type || 'CFO'} • Năm {file.fiscal_year || 2025}
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-left text-[11px] space-y-1.5 text-slate-400">
+                <p className="font-semibold text-slate-300">📄 Chi tiết tài liệu bảo mật:</p>
+                <p>• Phiên bản: <strong className="text-blue-400">v{file.current_version || 1}</strong></p>
+                <p>• Thẻ tag: <strong className="text-slate-300">{file.tags?.join(', ') || 'Hợp đồng'}</strong></p>
+                <p>• Trạng thái: <strong className="text-emerald-400">{file.status || 'Approved'}</strong></p>
+              </div>
+
+              <div className="flex items-center justify-center space-x-2 pt-2">
+                <button
+                  onClick={handleRealDownload}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-md text-xs min-h-[44px] flex items-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải xuống file ngay</span>
+                </button>
+
+                {fileUrl && (
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold transition-all text-xs min-h-[44px] flex items-center space-x-1.5"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Mở trực tiếp</span>
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>
