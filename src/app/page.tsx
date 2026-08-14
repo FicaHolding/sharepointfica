@@ -360,6 +360,10 @@ function SharePointContent() {
         if (dbClients && dbClients.length > 0) {
           setClients(dbClients);
         }
+        const dbFiles = await sharepointService.fetchFiles();
+        if (dbFiles && dbFiles.length > 0) {
+          setFiles(dbFiles);
+        }
       } catch {
         // Keep initial clients fallback
       }
@@ -375,6 +379,10 @@ function SharePointContent() {
       const refreshedProfiles = await sharepointService.fetchProfiles();
       if (refreshedProfiles) {
         setSystemUsers(refreshedProfiles);
+      }
+      const refreshedFiles = await sharepointService.fetchFiles();
+      if (refreshedFiles && refreshedFiles.length > 0) {
+        setFiles(refreshedFiles);
       }
     });
 
