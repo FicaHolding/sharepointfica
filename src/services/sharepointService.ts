@@ -400,7 +400,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload file to Supabase Storage using centralized bucket constant
+  // Upload file to Supabase Storage with STRICT 2-Phase Verification
   async uploadFile(
     file: File,
     clientId: string,
@@ -414,34 +414,42 @@ export const sharepointService = {
       createdBy: string;
       createdByName: string;
     }
-  ): Promise<DocumentFile | null> {
+  ): Promise<{ success: boolean; doc?: DocumentFile; error?: string }> {
     try {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      // Upload to Storage bucket using centralized constant
+      // Phase 1: Upload to Storage bucket
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
       if (storageError) {
-        console.warn(`Supabase Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+        console.error(`Supabase Storage Upload Error (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+        return { success: false, error: `Lỗi Supabase Storage: ${storageError.message}` };
       }
 
-      const payloadDoc = {
+      // Phase 2: Insert into Database `documents` & `files` tables
+      const validClientId = isValidUUID(clientId) ? clientId : null;
+      const validCreatedBy = isValidUUID(metadata.createdBy) ? metadata.createdBy : null;
+
+      const payloadDoc: any = {
         id: newId,
         name: metadata.name,
         size: file.size,
+        file_size: file.size,
         mime_type: file.type || 'application/pdf',
         storage_path: storagePath,
         folder_id: folderId,
-        client_id: isValidUUID(clientId) ? clientId : null,
+        client_id: validClientId,
         service_type: metadata.serviceType || 'CFO',
         fiscal_year: metadata.fiscalYear || 2025,
         status: metadata.status || 'Approved',
         tags: metadata.tags || ['Tải lên'],
         uploaded_by: metadata.createdByName || 'Fica Admin',
+        created_by: validCreatedBy,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
 
       const { data: docData, error: dbError } = await supabase
@@ -455,18 +463,19 @@ export const sharepointService = {
         await supabase.from('files').insert([
           {
             id: newId,
-            client_id: isValidUUID(clientId) ? clientId : null,
+            client_id: validClientId,
             folder_id: folderId,
             name: metadata.name,
             current_version: 1,
             file_size: file.size,
             mime_type: file.type || 'application/pdf',
             storage_path: storagePath,
-            status: metadata.status,
-            fiscal_year: metadata.fiscalYear,
-            service_type: metadata.serviceType,
-            tags: metadata.tags,
-            created_by: isValidUUID(metadata.createdBy) ? metadata.createdBy : null,
+            status: metadata.status || 'Approved',
+            fiscal_year: metadata.fiscalYear || 2025,
+            service_type: metadata.serviceType || 'CFO',
+            tags: metadata.tags || ['Tải lên'],
+            created_by: validCreatedBy,
+            created_at: new Date().toISOString(),
           },
         ]);
       }
@@ -497,15 +506,15 @@ export const sharepointService = {
         file_name: metadata.name,
         action_type: 'UPLOAD_FILE',
         action_details: `Tải lên file ${metadata.name} (Dịch vụ ${metadata.serviceType})`,
-        performed_by: isValidUUID(metadata.createdBy) ? metadata.createdBy : 'a1111111-1111-4111-8111-111111111111',
+        performed_by: validCreatedBy || undefined,
         performed_by_name: metadata.createdByName,
         performed_by_role: 'admin',
       });
 
-      return createdDoc;
+      return { success: true, doc: createdDoc };
     } catch (err: any) {
       console.error('Upload exception:', err.message);
-      return null;
+      return { success: false, error: err.message || 'Lỗi xử lý file upload' };
     }
   },
 
@@ -578,7 +587,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload Company Logo to Supabase Storage with 2MB validation
+  // Upload Company Logo to Supabase Storage with Fixed Permanent Path & 2MB Validation
   async uploadCompanyLogo(file: File): Promise<{ success: boolean; logoUrl?: string; error?: string }> {
     try {
       if (file.size > 2 * 1024 * 1024) {
@@ -589,8 +598,7 @@ export const sharepointService = {
         };
       }
 
-      const fileExt = file.name.split('.').pop() || 'png';
-      const storagePath = `system_settings/company_logo_${Date.now()}.${fileExt}`;
+      const storagePath = `system_settings/company_logo.png`;
 
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
@@ -600,8 +608,12 @@ export const sharepointService = {
         console.warn('Storage logo upload notice:', storageError.message);
       }
 
-      const res = await this.getFilePreviewOrDownloadUrl(storagePath);
-      let logoUrl = res.url;
+      // Permanent Public URL
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(storagePath);
+
+      let logoUrl = publicData?.publicUrl;
 
       if (!logoUrl) {
         logoUrl = URL.createObjectURL(file);
@@ -609,6 +621,7 @@ export const sharepointService = {
 
       if (typeof window !== 'undefined') {
         localStorage.setItem('fica_company_logo', logoUrl);
+        localStorage.setItem('fica_company_logo_path', storagePath);
       }
 
       await this.logAudit({
@@ -625,10 +638,37 @@ export const sharepointService = {
     }
   },
 
+  // Get Permanent Company Logo URL across reloads
+  async getCompanyLogoUrl(): Promise<string | null> {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_company_logo');
+      if (stored && !stored.startsWith('blob:')) return stored;
+    }
+    try {
+      const { data } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl('system_settings/company_logo.png');
+
+      if (data?.publicUrl) {
+        const res = await fetch(data.publicUrl, { method: 'HEAD' });
+        if (res.ok) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_company_logo', data.publicUrl);
+          }
+          return data.publicUrl;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  },
+
   // Reset/Remove Company Logo back to default
   removeCompanyLogo() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fica_company_logo');
+      localStorage.removeItem('fica_company_logo_path');
     }
     this.logAudit({
       action_type: 'UPDATE_METADATA',

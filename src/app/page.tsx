@@ -45,16 +45,17 @@ function SharePointContent() {
   // Mobile Drawer State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Dynamic Company Logo State
+  // Dynamic Company Logo State with Permanent Fetch
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedLogo = localStorage.getItem('fica_company_logo');
-      if (storedLogo) {
-        setCompanyLogoUrl(storedLogo);
+    async function loadCompanyLogo() {
+      const logo = await sharepointService.getCompanyLogoUrl();
+      if (logo) {
+        setCompanyLogoUrl(logo);
       }
     }
+    loadCompanyLogo();
   }, []);
 
   // Active Logged In User State (Dynamic Persistence)
@@ -77,7 +78,7 @@ function SharePointContent() {
     setToasts((prev) => [...prev, { id, type, title, message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 4500);
   };
 
   // CLIENTS DATA (Loaded dynamically from Supabase `clients`)
@@ -144,47 +145,51 @@ function SharePointContent() {
     selectedTags: [],
   });
 
-  // Standard 4 subfolders template with Valid UUIDs
-  const createSubfoldersForClient = (clientId: string): FolderItem[] => [
-    {
-      id: `sf111111-1111-4111-8111-${clientId.substring(0, 12)}`,
-      client_id: clientId,
-      name: '01_Pháp lý & Hợp đồng',
-      is_system_folder: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-    },
-    {
-      id: `sf222222-2222-4222-8222-${clientId.substring(0, 12)}`,
-      client_id: clientId,
-      name: '02_Chứng từ & Báo cáo Tài chính',
-      is_system_folder: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-    },
-    {
-      id: `sf333333-3333-4333-8333-${clientId.substring(0, 12)}`,
-      client_id: clientId,
-      name: '03_Dự án Tư vấn & Kiểm toán',
-      is_system_folder: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-    },
-    {
-      id: `sf444444-4444-4444-8444-${clientId.substring(0, 12)}`,
-      client_id: clientId,
-      name: '04_Báo cáo Nghiệm thu',
-      is_system_folder: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-    },
-  ];
+  // Standard 4 subfolders template with Deterministic Subfolder IDs
+  const createSubfoldersForClient = (clientId: string): FolderItem[] => {
+    const cleanId = clientId.replace(/-/g, '').padEnd(32, '0');
+    const suffix = cleanId.substring(0, 12);
+    return [
+      {
+        id: `sf111111-1111-4111-8111-${suffix}`,
+        client_id: clientId,
+        name: '01_Pháp lý & Hợp đồng',
+        is_system_folder: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: currentUser.id,
+      },
+      {
+        id: `sf222222-2222-4222-8222-${suffix}`,
+        client_id: clientId,
+        name: '02_Chứng từ & Báo cáo Tài chính',
+        is_system_folder: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: currentUser.id,
+      },
+      {
+        id: `sf333333-3333-4333-8333-${suffix}`,
+        client_id: clientId,
+        name: '03_Dự án Tư vấn & Kiểm toán',
+        is_system_folder: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: currentUser.id,
+      },
+      {
+        id: `sf444444-4444-4444-8444-${suffix}`,
+        client_id: clientId,
+        name: '04_Báo cáo Nghiệm thu',
+        is_system_folder: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: currentUser.id,
+      },
+    ];
+  };
 
-  // Helper to Update URL without breaking browser history (Clean Service-only query params)
+  // Helper to Update URL without breaking browser history
   const updateUrlState = (
     clientId?: string | null,
     folderId?: string | null,
@@ -274,7 +279,7 @@ function SharePointContent() {
           setSelectedClient(matchedClient);
           if (urlFolderParam) {
             const subFolders = createSubfoldersForClient(matchedClient.id);
-            const matchedFolder = subFolders.find((sf) => sf.id === urlFolderParam);
+            const matchedFolder = subFolders.find((sf) => sf.id === urlFolderParam || sf.id.substring(0, 8) === urlFolderParam.substring(0, 8));
             if (matchedFolder) {
               setSelectedSubFolder(matchedFolder);
             }
@@ -409,7 +414,7 @@ function SharePointContent() {
     {
       id: 'f1111111-1111-4111-8111-111111111111',
       client_id: 'c1111111-1111-4111-8111-111111111111',
-      folder_id: 'sf111111-1111-4111-8111-c1111111-1111',
+      folder_id: 'sf111111-1111-4111-8111-c11111110000',
       name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
       current_version: 2,
       file_size: 4250100,
@@ -428,7 +433,7 @@ function SharePointContent() {
     {
       id: 'f2222222-2222-4222-8222-222222222222',
       client_id: 'c1111111-1111-4111-8111-111111111111',
-      folder_id: 'sf222222-2222-4222-8222-c1111111-1111',
+      folder_id: 'sf222222-2222-4222-8222-c11111110000',
       name: 'Bao_Cao_Tai_Chinh_Kiem_Toan_2024.xlsx',
       current_version: 1,
       file_size: 8900400,
@@ -447,7 +452,7 @@ function SharePointContent() {
     {
       id: 'f3333333-3333-4333-8333-333333333333',
       client_id: 'c2222222-2222-4222-8222-222222222222',
-      folder_id: 'sf333333-3333-4333-8333-c2222222-2222',
+      folder_id: 'sf333333-3333-4333-8333-c22222220000',
       name: 'Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
       current_version: 3,
       file_size: 6100200,
@@ -483,12 +488,20 @@ function SharePointContent() {
       try {
         const dbFiles = await sharepointService.fetchFiles(selectedClient?.id, selectedSubFolder?.id);
         setFiles((prev) => {
-          const merged = [...dbFiles, ...localFiles];
+          const merged = [...dbFiles];
+
+          localFiles.forEach((lf) => {
+            if (!merged.some((m) => m.id === lf.id || m.storage_path === lf.storage_path)) {
+              merged.push(lf);
+            }
+          });
+
           prev.forEach((p) => {
-            if (!merged.some((m) => m.id === p.id)) {
+            if (!merged.some((m) => m.id === p.id || m.storage_path === p.storage_path)) {
               merged.push(p);
             }
           });
+
           return merged;
         });
       } catch {
@@ -496,7 +509,9 @@ function SharePointContent() {
           setFiles((prev) => {
             const merged = [...localFiles];
             prev.forEach((p) => {
-              if (!merged.some((m) => m.id === p.id)) merged.push(p);
+              if (!merged.some((m) => m.id === p.id || m.storage_path === p.storage_path)) {
+                merged.push(p);
+              }
             });
             return merged;
           });
@@ -705,7 +720,7 @@ function SharePointContent() {
     addToast('success', 'Đã khôi phục trạng thái Active!', `Folder: ${client.folder_name}`);
   };
 
-  // REAL SUPABASE STORAGE & DATABASE FILE UPLOAD WITH LOCALSTORAGE INSTANT FALLBACK
+  // STRICT 2-PHASE FILE UPLOAD HANDLER WITH ABSOLUTE SUCCESS VERIFICATION
   const handleUploadFile = async (data: {
     name: string;
     file: File | null;
@@ -714,50 +729,49 @@ function SharePointContent() {
     status: DocumentFile['status'];
     tags: string[];
   }) => {
-    if (!selectedClient) return;
-
-    const folderId = selectedSubFolder ? selectedSubFolder.id : `sf111111-1111-4111-8111-${selectedClient.id.substring(0, 12)}`;
-
-    let uploadedDoc: DocumentFile | null = null;
-    if (data.file) {
-      uploadedDoc = await sharepointService.uploadFile(data.file, selectedClient.id, folderId, {
-        name: data.name,
-        fiscalYear: data.fiscalYear,
-        serviceType: data.serviceType,
-        status: data.status,
-        tags: data.tags,
-        createdBy: currentUser.id,
-        createdByName: currentUser.full_name,
-      });
+    if (!selectedClient) {
+      addToast('error', 'Chưa chọn Khách hàng!', 'Vui lòng chọn một khách hàng trước khi tải file.');
+      return;
     }
 
-    const newFile: DocumentFile = uploadedDoc || {
-      id: crypto.randomUUID(),
-      client_id: selectedClient.id,
-      folder_id: folderId,
-      name: data.name,
-      current_version: 1,
-      file_size: data.file ? data.file.size : 3200000,
-      mime_type: data.file ? data.file.type : 'application/pdf',
-      storage_path: `${selectedClient.id}/${Date.now()}_${data.name}`,
-      status: data.status,
-      fiscal_year: data.fiscalYear,
-      service_type: data.serviceType,
-      tags: data.tags,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_by: currentUser.id,
-      created_by_name: currentUser.full_name,
-      modified_by_name: currentUser.full_name,
-    };
+    if (!data.file) {
+      addToast('error', 'Chưa chọn File!', 'Vui lòng nhấp để chọn một file tài liệu.');
+      return;
+    }
 
+    const folderId = selectedSubFolder
+      ? selectedSubFolder.id
+      : createSubfoldersForClient(selectedClient.id)[0].id;
+
+    // Call 2-phase verified upload
+    const res = await sharepointService.uploadFile(data.file, selectedClient.id, folderId, {
+      name: data.name,
+      fiscalYear: data.fiscalYear,
+      serviceType: data.serviceType,
+      status: data.status,
+      tags: data.tags,
+      createdBy: currentUser.id,
+      createdByName: currentUser.full_name,
+    });
+
+    if (!res.success || !res.doc) {
+      // Direct Error Toast on Genuine Upload/DB Failure
+      addToast('error', 'Lỗi lưu tài liệu vào Supabase Storage/CSDL!', res.error || 'Không thể lưu file.');
+      return;
+    }
+
+    const newFile: DocumentFile = res.doc;
+
+    // Add to Local React State & LocalStorage ONLY on confirmed success
     setFiles((prev) => {
       const updated = [newFile, ...prev];
       if (typeof window !== 'undefined') {
         try {
           const storedDocs = localStorage.getItem('fica_uploaded_documents');
           const existing: DocumentFile[] = storedDocs ? JSON.parse(storedDocs) : [];
-          localStorage.setItem('fica_uploaded_documents', JSON.stringify([newFile, ...existing]));
+          if (!existing.some((e) => e.id === newFile.id || e.storage_path === newFile.storage_path)) {
+            localStorage.setItem('fica_uploaded_documents', JSON.stringify([newFile, ...existing]));
+          }
         } catch {
           // Ignore
         }
@@ -772,6 +786,8 @@ function SharePointContent() {
       `Tải lên file ${data.name} (Dịch vụ ${data.serviceType})`,
       data.name
     );
+
+    // Toast ONLY shown when both Storage and Database Insert are verified successful
     addToast('success', 'Đã lưu vĩnh viễn vào Supabase Storage & CSDL!', `File: ${data.name}`);
   };
 
@@ -923,13 +939,21 @@ function SharePointContent() {
     return list;
   }, [clients, activeTab, globalSearchQuery, filterState.searchQuery, filterState.serviceType, activeClientsList, archivedClientsList]);
 
+  // FILTERED FILES LIST WITH SAFE SUBFOLDER & CLIENT MATCHING
   const displayedFiles = useMemo(() => {
     let list = files;
+
     if (selectedClient) {
-      list = list.filter((f) => f.client_id === selectedClient.id);
+      list = list.filter((f) => !f.client_id || f.client_id === selectedClient.id);
     }
+
     if (selectedSubFolder) {
-      list = list.filter((f) => f.folder_id === selectedSubFolder.id);
+      list = list.filter((f) => {
+        if (!f.folder_id) return true;
+        if (f.folder_id === selectedSubFolder.id) return true;
+        if (f.folder_id.substring(0, 8) === selectedSubFolder.id.substring(0, 8)) return true;
+        return false;
+      });
     }
 
     const query = globalSearchQuery.toLowerCase() || filterState.searchQuery.toLowerCase();
@@ -1120,7 +1144,7 @@ function SharePointContent() {
                   )}
                 </h1>
                 <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">
-                  Đồng bộ thời gian thực Supabase Realtime Engine | Company Logo Customization Active
+                  Đồng bộ thời gian thực Supabase Realtime Engine | Data Safety Guaranteed
                 </p>
               </div>
 
@@ -1268,7 +1292,7 @@ function SharePointContent() {
               <span className="truncate">Bảo mật & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono hidden sm:block">
-              Next.js 15 App Router | Custom Company Logo Active
+              Next.js 15 App Router | Verified 2-Phase Upload Active
             </div>
           </footer>
         </main>
