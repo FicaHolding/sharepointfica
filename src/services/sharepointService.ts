@@ -10,6 +10,24 @@ const isValidUUID = (id: string): boolean => {
 };
 
 export const sharepointService = {
+  // Ensure the central storage bucket exists or attempt client-side creation
+  async ensureBucketExists(): Promise<boolean> {
+    try {
+      const { data: buckets } = await supabase.storage.listBuckets();
+      if (Array.isArray(buckets) && buckets.some((b) => b.name === SUPABASE_STORAGE_BUCKET || b.id === SUPABASE_STORAGE_BUCKET)) {
+        return true;
+      }
+      const { error } = await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
+        public: true,
+        fileSizeLimit: 52428800,
+      });
+      if (!error) return true;
+    } catch {
+      // Ignore client side permission restrictions
+    }
+    return false;
+  },
+
   // Fetch profiles from Supabase database with Defensive Null Checks
   async fetchProfiles(): Promise<UserProfile[]> {
     try {
@@ -400,7 +418,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload file to Supabase Storage with STRICT 2-Phase Verification
+  // Upload file to Supabase Storage with STRICT 2-Phase Verification & Bucket Check
   async uploadFile(
     file: File,
     clientId: string,
@@ -416,6 +434,8 @@ export const sharepointService = {
     }
   ): Promise<{ success: boolean; doc?: DocumentFile; error?: string }> {
     try {
+      await this.ensureBucketExists();
+
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
@@ -426,6 +446,14 @@ export const sharepointService = {
 
       if (storageError) {
         console.error(`Supabase Storage Upload Error (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+
+        if (storageError.message.includes('Bucket not found') || storageError.message.includes('404')) {
+          return {
+            success: false,
+            error: `Lỗi 404 (NoSuchBucket): Bucket '${SUPABASE_STORAGE_BUCKET}' chưa tồn tại trong Supabase Storage. Vui lòng chạy câu lệnh SQL tạo bucket trong Supabase SQL Editor!`,
+          };
+        }
+
         return { success: false, error: `Lỗi Supabase Storage: ${storageError.message}` };
       }
 
@@ -546,7 +574,7 @@ export const sharepointService = {
       return {
         url: null,
         isSigned: false,
-        error: `Không tìm thấy file trong bucket '${SUPABASE_STORAGE_BUCKET}' (Path: ${cleanPath}).`,
+        error: `Supabase Storage trả về lỗi 404 (NoSuchBucket). Bucket '${SUPABASE_STORAGE_BUCKET}' chưa tồn tại hoặc bị sai đường dẫn.`,
       };
     } catch (err: any) {
       console.warn('Storage URL fetch error:', err.message);
@@ -597,6 +625,8 @@ export const sharepointService = {
           error: `Dung lượng file logo (${mbSize} MB) vượt quá giới hạn tối đa 2MB. Vui lòng chọn file nhỏ hơn!`,
         };
       }
+
+      await this.ensureBucketExists();
 
       const storagePath = `system_settings/company_logo.png`;
 
@@ -676,6 +706,45 @@ export const sharepointService = {
       performed_by_name: 'Admin',
       performed_by_role: 'admin',
     });
+  },
+
+  // Audit all metadata records against physical blob existence in Storage
+  async auditPhysicalFiles(files: DocumentFile[]): Promise<{
+    total: number;
+    availableCount: number;
+    missingCount: number;
+    missingFiles: DocumentFile[];
+  }> {
+    const missingFiles: DocumentFile[] = [];
+    let availableCount = 0;
+
+    for (const f of files) {
+      if (!f.storage_path) {
+        missingFiles.push(f);
+        continue;
+      }
+      try {
+        const cleanPath = f.storage_path.replace(/^\/+/, '');
+        const { data, error } = await supabase.storage
+          .from(SUPABASE_STORAGE_BUCKET)
+          .download(cleanPath);
+
+        if (error || !data) {
+          missingFiles.push(f);
+        } else {
+          availableCount++;
+        }
+      } catch {
+        missingFiles.push(f);
+      }
+    }
+
+    return {
+      total: files.length,
+      availableCount,
+      missingCount: missingFiles.length,
+      missingFiles,
+    };
   },
 
   // Log Audit Action

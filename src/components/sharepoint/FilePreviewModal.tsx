@@ -18,6 +18,9 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCcw,
+  Copy,
+  Check,
+  Database,
 } from 'lucide-react';
 import { DocumentFile } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
@@ -43,7 +46,31 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
   const supabase = createClient();
+
+  const sqlScript = `-- 1. Khởi tạo Storage Bucket '${SUPABASE_STORAGE_BUCKET}' trên Supabase:
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('${SUPABASE_STORAGE_BUCKET}', '${SUPABASE_STORAGE_BUCKET}', true, 52428800)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Khởi tạo RLS Policy cấp quyền xem, tải lên, sửa và xóa file:
+DROP POLICY IF EXISTS "Public access on ${SUPABASE_STORAGE_BUCKET} bucket" ON storage.objects;
+CREATE POLICY "Public access on ${SUPABASE_STORAGE_BUCKET} bucket"
+ON storage.objects FOR ALL
+TO public, authenticated, anon
+USING (bucket_id = '${SUPABASE_STORAGE_BUCKET}')
+WITH CHECK (bucket_id = '${SUPABASE_STORAGE_BUCKET}');`;
+
+  const handleCopySql = () => {
+    try {
+      navigator.clipboard.writeText(sqlScript);
+      setCopiedSql(true);
+      setTimeout(() => setCopiedSql(false), 3000);
+    } catch {
+      // Ignore
+    }
+  };
 
   useEffect(() => {
     async function loadPreviewUrl() {
@@ -60,6 +87,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       }
 
       try {
+        // Attempt bucket auto-verification
+        await sharepointService.ensureBucketExists();
+
         // 1. Get Signed URL or Public URL
         const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
 
@@ -68,14 +98,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           try {
             const headCheck = await fetch(res.url, { method: 'HEAD' });
             if (!headCheck.ok) {
-              // If status is 404 or 400, bucket or object doesn't exist
               setHasStorageError(true);
               setErrorMessage(`Supabase Storage trả về lỗi 404 (NoSuchBucket). Bucket '${SUPABASE_STORAGE_BUCKET}' chưa tồn tại hoặc bị sai đường dẫn.`);
             } else {
               setFileUrl(res.url);
             }
           } catch {
-            // CORS or offline check fallback: set url directly
+            // CORS or offline fallback: use URL
             setFileUrl(res.url);
           }
         } else {
@@ -222,26 +251,41 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               <span>Đang kết nối Supabase Storage...</span>
             </div>
           ) : hasStorageError ? (
-            /* Friendly Vietnamese Error Banner when Bucket is missing or 404 */
-            <div className="text-center p-6 sm:p-8 bg-slate-900/90 rounded-2xl border border-amber-500/30 max-w-lg text-slate-300 text-xs space-y-4 shadow-2xl animate-in fade-in">
-              <div className="p-3 bg-amber-500/20 rounded-full w-14 h-14 mx-auto flex items-center justify-center text-amber-400 border border-amber-500/30">
-                <AlertTriangle className="w-7 h-7" />
+            /* Friendly Vietnamese Error Card with 1-Click Copy SQL Script for Bucket setup */
+            <div className="text-center p-5 sm:p-6 bg-slate-900/90 rounded-2xl border border-amber-500/30 max-w-xl text-slate-300 text-xs space-y-4 shadow-2xl animate-in fade-in my-auto">
+              <div className="p-3 bg-amber-500/20 rounded-full w-12 h-12 mx-auto flex items-center justify-center text-amber-400 border border-amber-500/30">
+                <AlertTriangle className="w-6 h-6" />
               </div>
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-sm text-amber-300">Không thể xem trực tiếp file từ Storage</h4>
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-amber-300">Lỗi: Supabase Bucket '{SUPABASE_STORAGE_BUCKET}' Chưa Tồn Tại (404)</h4>
                 <p className="text-slate-400 text-[11px] font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-left">
-                  {errorMessage || "Lỗi: Bucket 'documents' chưa khởi tạo trên Supabase Storage."}
+                  {errorMessage || `Supabase Storage trả về 404 (NoSuchBucket). Bucket '${SUPABASE_STORAGE_BUCKET}' chưa được khởi tạo.`}
                 </p>
               </div>
 
-              <div className="p-3 bg-blue-950/60 border border-blue-800/50 rounded-xl text-left text-[11px] space-y-1 text-blue-200">
-                <p className="font-bold text-blue-400">💡 Hướng dẫn xử lý cho Quản trị viên:</p>
-                <p>1. Mở **Supabase Dashboard → Storage → Buckets**.</p>
-                <p>2. Kiểm tra bucket có tên **<code className="text-blue-300 font-mono">documents</code>** đã được tạo hay chưa.</p>
-                <p>3. Đảm bảo đã thiết lập quyền **Public Access** hoặc cấp RLS policy cho bucket.</p>
+              <div className="p-3.5 bg-slate-950 border border-blue-900/60 rounded-xl text-left text-[11px] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-400 flex items-center space-x-1.5">
+                    <Database className="w-4 h-4 text-blue-400" />
+                    <span>Lệnh SQL Khởi Tạo Bucket '{SUPABASE_STORAGE_BUCKET}' & Cấp Quyền RLS:</span>
+                  </span>
+                  <button
+                    onClick={handleCopySql}
+                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition-all flex items-center space-x-1 min-h-[30px]"
+                  >
+                    {copiedSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSql ? 'Đã sao chép!' : 'Sao chép SQL'}</span>
+                  </button>
+                </div>
+                <pre className="p-2.5 bg-slate-900 text-slate-300 font-mono text-[10px] rounded border border-slate-800 overflow-x-auto select-all">
+                  {sqlScript}
+                </pre>
+                <p className="text-slate-400 text-[10px]">
+                  💡 <strong>Cách xử lý:</strong> Hãy mở Supabase Dashboard → <strong>SQL Editor</strong> → dán câu lệnh SQL ở trên và nhấn <strong>RUN</strong>.
+                </p>
               </div>
 
-              <div className="flex items-center justify-center space-x-2 pt-2">
+              <div className="flex items-center justify-center space-x-2 pt-1">
                 <button
                   onClick={handleRealDownload}
                   className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-colors shadow-md text-xs min-h-[44px]"
