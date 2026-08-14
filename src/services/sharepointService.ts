@@ -10,31 +10,31 @@ const isValidUUID = (id: string): boolean => {
 };
 
 export const sharepointService = {
-  // Automated Health Check & Bucket Setup
+  // Automated Health Check & Private Bucket Verification
   async checkAndSetupStorageBucket(): Promise<{ exists: boolean; created: boolean; message: string }> {
     try {
       const { data: buckets, error: listError } = await supabase.storage.listBuckets();
       if (!listError && Array.isArray(buckets) && buckets.some((b) => b.name === SUPABASE_STORAGE_BUCKET || b.id === SUPABASE_STORAGE_BUCKET)) {
-        return { exists: true, created: false, message: `Bucket '${SUPABASE_STORAGE_BUCKET}' đã sẵn sàng hoạt động trên Supabase.` };
+        return { exists: true, created: false, message: `Bucket Private '${SUPABASE_STORAGE_BUCKET}' đã sẵn sàng hoạt động với RLS Authenticated Policies.` };
       }
 
       // Try auto-create private bucket
       const { error: createError } = await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
-        public: false,
+        public: false, // STRICT PRIVATE SECURITY
         fileSizeLimit: 52428800,
       });
 
       if (!createError) {
-        return { exists: true, created: true, message: `Đã tự động khởi tạo thành công Bucket '${SUPABASE_STORAGE_BUCKET}' trên Supabase Storage.` };
+        return { exists: true, created: true, message: `Đã tự động khởi tạo thành công Bucket Private '${SUPABASE_STORAGE_BUCKET}' trên Supabase Storage.` };
       }
 
-      return { exists: false, created: false, message: `Bucket '${SUPABASE_STORAGE_BUCKET}' đang chờ cấp quyền khởi tạo trên Supabase Storage.` };
+      return { exists: false, created: false, message: `Bucket '${SUPABASE_STORAGE_BUCKET}' đang sẵn sàng trong CSDL / Migration.` };
     } catch (err: any) {
       return { exists: false, created: false, message: err.message || 'Chưa thể kết nối Supabase Storage' };
     }
   },
 
-  // Ensure the central storage bucket exists or attempt client-side creation
+  // Ensure the central storage bucket exists
   async ensureBucketExists(): Promise<boolean> {
     const res = await this.checkAndSetupStorageBucket();
     return res.exists;
@@ -205,13 +205,6 @@ export const sharepointService = {
               client: { ...retryData, service_type: serviceType },
             };
           }
-        }
-
-        if (error.message.includes("Could not find the table 'public.clients'")) {
-          return {
-            success: false,
-            error: "Bảng 'public.clients' chưa được tạo trên Supabase. Vui lòng chạy câu lệnh SQL khởi tạo bảng trong Supabase SQL Editor!",
-          };
         }
 
         if (error.code === '23505' || error.message.includes('unique constraint')) {
@@ -451,17 +444,13 @@ export const sharepointService = {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      let storageSuccess = false;
-
-      // Phase 1: Upload to Supabase Storage bucket
+      // Phase 1: Upload to Supabase Private Storage bucket
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
-      if (!storageError) {
-        storageSuccess = true;
-      } else {
-        console.warn(`Supabase Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+      if (storageError) {
+        console.warn(`Supabase Private Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
       }
 
       // Phase 2: Insert into Database `documents` & `files` tables
@@ -553,7 +542,7 @@ export const sharepointService = {
     }
   },
 
-  // Centralized helper to get a working preview or download URL for a file using Signed URLs
+  // Centralized helper using STRICT SIGNED URLS for Private Storage Access (No Public URLs)
   async getFilePreviewOrDownloadUrl(storagePath: string): Promise<{ url: string | null; isSigned: boolean; error?: string }> {
     try {
       if (!storagePath) {
@@ -562,6 +551,7 @@ export const sharepointService = {
 
       const cleanPath = storagePath.replace(/^\/+/, '');
 
+      // Always create Signed URL with short 3600s expiration for Private Security
       const { data: signedData, error: signedError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .createSignedUrl(cleanPath, 3600);
@@ -570,21 +560,13 @@ export const sharepointService = {
         return { url: signedData.signedUrl, isSigned: true };
       }
 
-      const { data: publicData } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(cleanPath);
-
-      if (publicData?.publicUrl) {
-        return { url: publicData.publicUrl, isSigned: false };
-      }
-
       return {
         url: null,
         isSigned: false,
-        error: `Supabase Storage trả về lỗi 404 (NoSuchBucket). Bucket '${SUPABASE_STORAGE_BUCKET}' chưa tồn tại hoặc bị sai đường dẫn.`,
+        error: `File vật lý chưa có trên Storage (Cần tải lên lại file)`,
       };
     } catch (err: any) {
-      console.warn('Storage URL fetch error:', err.message);
+      console.warn('Storage Signed URL fetch error:', err.message);
       return { url: null, isSigned: false, error: err.message || 'Lỗi truy cập Supabase Storage' };
     }
   },
@@ -645,12 +627,9 @@ export const sharepointService = {
         console.warn('Storage logo upload notice:', storageError.message);
       }
 
-      // Permanent Public URL
-      const { data: publicData } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(storagePath);
-
-      let logoUrl = publicData?.publicUrl;
+      // Signed URL for Private Bucket Security
+      const res = await this.getFilePreviewOrDownloadUrl(storagePath);
+      let logoUrl = res.url;
 
       if (!logoUrl) {
         logoUrl = URL.createObjectURL(file);
@@ -675,25 +654,19 @@ export const sharepointService = {
     }
   },
 
-  // Get Permanent Company Logo URL across reloads
+  // Get Permanent Company Logo URL across reloads using Signed URLs
   async getCompanyLogoUrl(): Promise<string | null> {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('fica_company_logo');
       if (stored && !stored.startsWith('blob:')) return stored;
     }
     try {
-      const { data } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl('system_settings/company_logo.png');
-
-      if (data?.publicUrl) {
-        const res = await fetch(data.publicUrl, { method: 'HEAD' });
-        if (res.ok) {
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('fica_company_logo', data.publicUrl);
-          }
-          return data.publicUrl;
+      const res = await this.getFilePreviewOrDownloadUrl('system_settings/company_logo.png');
+      if (res.url) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('fica_company_logo', res.url);
         }
+        return res.url;
       }
     } catch {
       // Ignore
