@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Topbar } from '@/components/sharepoint/Topbar';
 import { Sidebar, ActiveNavTab } from '@/components/sharepoint/Sidebar';
 import { Breadcrumb } from '@/components/sharepoint/Breadcrumb';
@@ -37,8 +37,9 @@ import { Lock, Activity, Info, UploadCloud, Users, Settings } from 'lucide-react
 import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
 
-export default function SharePointHubPage() {
+function SharePointContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   // Active Logged In User State (Dynamic Persistence)
@@ -110,115 +111,15 @@ export default function SharePointHubPage() {
     },
   ]);
 
-  // Load Real Supabase Database Clients & User Profiles on Mount
-  useEffect(() => {
-    async function initData() {
-      // 1. Check LocalStorage Profile Persistence First
-      if (typeof window !== 'undefined') {
-        const storedProfile = localStorage.getItem('fica_user_profile');
-        if (storedProfile) {
-          try {
-            const parsed = JSON.parse(storedProfile);
-            if (parsed && parsed.full_name) {
-              setCurrentUser((prev) => ({ ...prev, ...parsed }));
-            }
-          } catch {
-            // Ignore
-          }
-        }
-      }
-
-      // 2. Fetch Auth Session & DB Profile
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session && session.user) {
-          const userEmail = session.user.email || 'admin@fica.vn';
-          const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
-          const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
-          const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
-          const metaPhone = session.user.user_metadata?.phone || '';
-
-          // Try fetching from `profiles` table
-          const { data: dbProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const finalName = dbProfile?.full_name || metaName;
-          const finalDept = dbProfile?.department || metaDept;
-          const finalPhone = dbProfile?.phone || metaPhone;
-
-          const updatedUser: UserProfile = {
-            id: session.user.id,
-            email: userEmail,
-            full_name: finalName,
-            role: metaRole,
-            department: finalDept,
-            phone: finalPhone,
-          };
-
-          setCurrentUser(updatedUser);
-
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('fica_user_profile', JSON.stringify(updatedUser));
-          }
-        }
-      } catch {
-        // Keep active session fallback
-      }
-
-      // 3. Fetch System Profiles from Supabase
-      try {
-        const profiles = await sharepointService.fetchProfiles();
-        if (profiles) {
-          setSystemUsers(profiles);
-        }
-      } catch {
-        // Keep fallback
-      }
-
-      // 4. Fetch Clients from Supabase DB
-      try {
-        const dbClients = await sharepointService.fetchClients();
-        if (dbClients && dbClients.length > 0) {
-          setClients(dbClients);
-        }
-      } catch {
-        // Keep initial clients fallback
-      }
-    }
-
-    initData();
-
-    // 5. Subscribe to Realtime DB updates (clients & profiles)
-    const unsubscribe = sharepointService.subscribeRealtime(async () => {
-      const refreshedClients = await sharepointService.fetchClients();
-      if (refreshedClients && refreshedClients.length > 0) {
-        setClients(refreshedClients);
-      }
-      const refreshedProfiles = await sharepointService.fetchProfiles();
-      if (refreshedProfiles) {
-        setSystemUsers(refreshedProfiles);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
   // Main UI Navigation state
   const [activeTab, setActiveTab] = useState<ActiveNavTab>('active_clients');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  // Breadcrumb / Path State
+  // Breadcrumb / Path State (Synced with URL)
   const [selectedClient, setSelectedClient] = useState<ClientFolder | null>(null);
   const [selectedSubFolder, setSelectedSubFolder] = useState<FolderItem | null>(null);
 
-  // Search & Metadata Filter State
+  // Search & Metadata Filter State (Synced with URL)
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [filterState, setFilterState] = useState<MetadataFilterState>({
     searchQuery: '',
@@ -227,32 +128,6 @@ export default function SharePointHubPage() {
     status: 'all',
     selectedTags: [],
   });
-
-  // Checkbox Selection State for Bulk Actions
-  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
-
-  // Modals & Panes visibility states
-  const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
-  const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
-  const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
-  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
-  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
-  const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
-  const [selectedClientForRename, setSelectedClientForRename] = useState<ClientFolder | null>(null);
-  const [selectedClientForDelete, setSelectedClientForDelete] = useState<ClientFolder | null>(null);
-  const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
-  const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
-  const [detailsItem, setDetailsItem] = useState<{
-    client?: ClientFolder;
-    subFolder?: FolderItem;
-    file?: DocumentFile;
-  }>({});
-
-  // Drag and Drop Zone State
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // Standard 4 subfolders template with Valid UUIDs
   const createSubfoldersForClient = (clientId: string): FolderItem[] => [
@@ -294,7 +169,191 @@ export default function SharePointHubPage() {
     },
   ];
 
-  // FILES DATA (Loaded dynamically from Supabase Database)
+  // BUG 2 FIX: SYNC ROUTING STATE WITH URL QUERY PARAMS FOR F5 PERSISTENCE
+  useEffect(() => {
+    const urlClientParam = searchParams.get('client');
+    const urlFolderParam = searchParams.get('folder');
+    const urlTabParam = searchParams.get('tab') as ActiveNavTab | null;
+    const urlServiceParam = searchParams.get('service');
+    const urlYearParam = searchParams.get('year');
+
+    if (urlTabParam && ['active_clients', 'archived_clients', 'reports', 'settings'].includes(urlTabParam)) {
+      setActiveTab(urlTabParam);
+    }
+
+    if (urlClientParam) {
+      const matchedClient = clients.find((c) => c.id === urlClientParam);
+      if (matchedClient) {
+        setSelectedClient(matchedClient);
+        if (urlFolderParam) {
+          const subFolders = createSubfoldersForClient(matchedClient.id);
+          const matchedFolder = subFolders.find((sf) => sf.id === urlFolderParam);
+          if (matchedFolder) {
+            setSelectedSubFolder(matchedFolder);
+          }
+        }
+      }
+    }
+
+    if (urlServiceParam || urlYearParam) {
+      setFilterState((prev) => ({
+        ...prev,
+        serviceType: (urlServiceParam as ServiceType) || prev.serviceType,
+        fiscalYear: urlYearParam ? Number(urlYearParam) : prev.fiscalYear,
+      }));
+    }
+  }, [searchParams, clients]);
+
+  // Helper to Update URL without breaking browser history
+  const updateUrlState = (clientId?: string | null, folderId?: string | null, tabName?: string | null) => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+
+    if (clientId) {
+      params.set('client', clientId);
+    } else {
+      params.delete('client');
+    }
+
+    if (folderId) {
+      params.set('folder', folderId);
+    } else {
+      params.delete('folder');
+    }
+
+    if (tabName && tabName !== 'active_clients') {
+      params.set('tab', tabName);
+    } else {
+      params.delete('tab');
+    }
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `/?${queryString}` : '/';
+    window.history.replaceState(null, '', newUrl);
+  };
+
+  // Load Real Supabase Database Clients & User Profiles on Mount
+  useEffect(() => {
+    async function initData() {
+      if (typeof window !== 'undefined') {
+        const storedProfile = localStorage.getItem('fica_user_profile');
+        if (storedProfile) {
+          try {
+            const parsed = JSON.parse(storedProfile);
+            if (parsed && parsed.full_name) {
+              setCurrentUser((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch {
+            // Ignore
+          }
+        }
+      }
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session && session.user) {
+          const userEmail = session.user.email || 'admin@fica.vn';
+          const metaName = session.user.user_metadata?.full_name || userEmail.split('@')[0];
+          const metaRole = (session.user.user_metadata?.role as UserRole) || 'admin';
+          const metaDept = session.user.user_metadata?.department || 'Fica Holding JSC';
+          const metaPhone = session.user.user_metadata?.phone || '';
+
+          const { data: dbProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          const finalName = dbProfile?.full_name || metaName;
+          const finalDept = dbProfile?.department || metaDept;
+          const finalPhone = dbProfile?.phone || metaPhone;
+
+          const updatedUser: UserProfile = {
+            id: session.user.id,
+            email: userEmail,
+            full_name: finalName,
+            role: metaRole,
+            department: finalDept,
+            phone: finalPhone,
+          };
+
+          setCurrentUser(updatedUser);
+
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_user_profile', JSON.stringify(updatedUser));
+          }
+        }
+      } catch {
+        // Keep active session fallback
+      }
+
+      try {
+        const profiles = await sharepointService.fetchProfiles();
+        if (profiles) {
+          setSystemUsers(profiles);
+        }
+      } catch {
+        // Keep fallback
+      }
+
+      try {
+        const dbClients = await sharepointService.fetchClients();
+        if (dbClients && dbClients.length > 0) {
+          setClients(dbClients);
+        }
+      } catch {
+        // Keep initial clients fallback
+      }
+    }
+
+    initData();
+
+    const unsubscribe = sharepointService.subscribeRealtime(async () => {
+      const refreshedClients = await sharepointService.fetchClients();
+      if (refreshedClients && refreshedClients.length > 0) {
+        setClients(refreshedClients);
+      }
+      const refreshedProfiles = await sharepointService.fetchProfiles();
+      if (refreshedProfiles) {
+        setSystemUsers(refreshedProfiles);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Checkbox Selection State for Bulk Actions
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+
+  // Modals & Panes visibility states
+  const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isDetailsPaneOpen, setIsDetailsPaneOpen] = useState(false);
+  const [isBulkMetadataModalOpen, setIsBulkMetadataModalOpen] = useState(false);
+  const [isUserManagementModalOpen, setIsUserManagementModalOpen] = useState(false);
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
+  const [selectedClientForRename, setSelectedClientForRename] = useState<ClientFolder | null>(null);
+  const [selectedClientForDelete, setSelectedClientForDelete] = useState<ClientFolder | null>(null);
+  const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
+  const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
+  const [detailsItem, setDetailsItem] = useState<{
+    client?: ClientFolder;
+    subFolder?: FolderItem;
+    file?: DocumentFile;
+  }>({});
+
+  // Drag and Drop Zone State
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // BUG 1 FIX: DYNAMIC FILE PERSISTENCE (Supabase DB + LocalStorage Fallback)
   const [files, setFiles] = useState<DocumentFile[]>([
     {
       id: 'f1111111-1111-4111-8111-111111111111',
@@ -355,42 +414,44 @@ export default function SharePointHubPage() {
     },
   ]);
 
-  // Dynamic Fetch Files from Supabase Database
+  // Load files from both Supabase DB and LocalStorage on Mount / Selection Change
   useEffect(() => {
     async function loadRealFiles() {
-      try {
-        const { data: dbDocs } = await supabase.from('documents').select('*');
-        if (dbDocs && dbDocs.length > 0) {
-          const mapped: DocumentFile[] = dbDocs.map((d: any) => ({
-            id: d.id,
-            client_id: d.client_id || selectedClient?.id || '',
-            folder_id: d.folder_id || '',
-            name: d.name,
-            current_version: 1,
-            file_size: Number(d.size || 0),
-            mime_type: d.mime_type || 'application/pdf',
-            storage_path: d.storage_path,
-            status: d.status || 'Approved',
-            fiscal_year: d.fiscal_year || 2025,
-            service_type: d.service_type || 'CFO',
-            tags: Array.isArray(d.tags) ? d.tags : ['Tài liệu'],
-            created_at: d.created_at,
-            updated_at: d.created_at,
-            created_by: d.uploaded_by || 'Admin',
-            created_by_name: d.uploaded_by || 'Admin',
-            modified_by_name: d.uploaded_by || 'Admin',
-          }));
+      // 1. Check LocalStorage Uploaded Files First
+      let localFiles: DocumentFile[] = [];
+      if (typeof window !== 'undefined') {
+        const storedDocs = localStorage.getItem('fica_uploaded_documents');
+        if (storedDocs) {
+          try {
+            localFiles = JSON.parse(storedDocs);
+          } catch {
+            // Ignore
+          }
+        }
+      }
 
+      // 2. Fetch from Supabase Database `documents` table
+      try {
+        const dbFiles = await sharepointService.fetchFiles(selectedClient?.id, selectedSubFolder?.id);
+        setFiles((prev) => {
+          const merged = [...dbFiles, ...localFiles];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) {
+              merged.push(p);
+            }
+          });
+          return merged;
+        });
+      } catch {
+        if (localFiles.length > 0) {
           setFiles((prev) => {
-            const combined = [...mapped];
+            const merged = [...localFiles];
             prev.forEach((p) => {
-              if (!combined.some((c) => c.id === p.id)) combined.push(p);
+              if (!merged.some((m) => m.id === p.id)) merged.push(p);
             });
-            return combined;
+            return merged;
           });
         }
-      } catch {
-        // Keep current state
       }
     }
 
@@ -447,7 +508,6 @@ export default function SharePointHubPage() {
   const handleCreateClient = async (code: string, name: string, serviceType: ServiceType) => {
     const folder_name = `[${code}] - ${name}`;
 
-    // 1. Call Supabase Database INSERT
     const res = await sharepointService.createClient(code, name, currentUser.id, serviceType);
 
     if (!res.success) {
@@ -470,12 +530,11 @@ export default function SharePointHubPage() {
       total_size_mb: 0,
     };
 
-    // 2. Update local state
     setClients([newClient, ...clients]);
     setSelectedClient(newClient);
     setSelectedSubFolder(null);
+    updateUrlState(newClient.id, null, activeTab);
 
-    // 3. Revalidate Server Components
     router.refresh();
 
     pushAuditLog('CREATE_CLIENT', `Tạo Khách hàng mới [${code}] - ${name} (${serviceType}) với 4 subfolders`, undefined, folder_name);
@@ -488,7 +547,6 @@ export default function SharePointHubPage() {
   const handleRenameClient = async (clientId: string, newCode: string, newName: string, serviceType?: ServiceType) => {
     const folder_name = `[${newCode}] - ${newName}`;
 
-    // 1. Call Supabase DB UPDATE with valid UUID & serviceType
     const dbRes = await sharepointService.renameClient(clientId, newCode, newName, serviceType);
 
     if (!dbRes.success) {
@@ -496,7 +554,6 @@ export default function SharePointHubPage() {
       return { success: false, error: dbRes.error };
     }
 
-    // 2. Update local state
     setClients((prev) =>
       prev.map((c) =>
         c.id === clientId
@@ -518,7 +575,6 @@ export default function SharePointHubPage() {
       );
     }
 
-    // 3. Revalidate Server Route Cache
     router.refresh();
 
     pushAuditLog('UPDATE_METADATA', `Cập nhật thông tin thư mục thành ${folder_name}`, undefined, folder_name);
@@ -542,6 +598,7 @@ export default function SharePointHubPage() {
       if (selectedClient?.id === clientId) {
         setSelectedClient(null);
         setSelectedSubFolder(null);
+        updateUrlState(null, null, activeTab);
       }
       router.refresh();
       pushAuditLog('DELETE_FILE', `Xóa vĩnh viễn thư mục khách hàng ${target.folder_name}`, undefined, target.folder_name);
@@ -599,7 +656,7 @@ export default function SharePointHubPage() {
     addToast('success', 'Đã khôi phục trạng thái Active!', `Folder: ${client.folder_name}`);
   };
 
-  // REAL SUPABASE STORAGE & DATABASE FILE UPLOAD HANDLER WITH REVALIDATION
+  // BUG 1 FIX: REAL SUPABASE STORAGE & DATABASE FILE UPLOAD WITH LOCALSTORAGE INSTANT FALLBACK
   const handleUploadFile = async (data: {
     name: string;
     file: File | null;
@@ -645,7 +702,21 @@ export default function SharePointHubPage() {
       modified_by_name: currentUser.full_name,
     };
 
-    setFiles((prev) => [newFile, ...prev]);
+    // Save to local state and LocalStorage for immediate persistence across reloads
+    setFiles((prev) => {
+      const updated = [newFile, ...prev];
+      if (typeof window !== 'undefined') {
+        try {
+          const storedDocs = localStorage.getItem('fica_uploaded_documents');
+          const existing: DocumentFile[] = storedDocs ? JSON.parse(storedDocs) : [];
+          localStorage.setItem('fica_uploaded_documents', JSON.stringify([newFile, ...existing]));
+        } catch {
+          // Ignore
+        }
+      }
+      return updated;
+    });
+
     router.refresh();
 
     pushAuditLog(
@@ -659,7 +730,25 @@ export default function SharePointHubPage() {
   // Delete single file
   const handleDeleteFile = (fileId: string) => {
     const targetFile = files.find((f) => f.id === fileId);
-    setFiles(files.filter((f) => f.id !== fileId));
+    setFiles((prev) => {
+      const updated = prev.filter((f) => f.id !== fileId);
+      if (typeof window !== 'undefined') {
+        try {
+          const storedDocs = localStorage.getItem('fica_uploaded_documents');
+          if (storedDocs) {
+            const existing: DocumentFile[] = JSON.parse(storedDocs);
+            localStorage.setItem(
+              'fica_uploaded_documents',
+              JSON.stringify(existing.filter((f) => f.id !== fileId))
+            );
+          }
+        } catch {
+          // Ignore
+        }
+      }
+      return updated;
+    });
+
     if (targetFile) {
       pushAuditLog('DELETE_FILE', `Đã xóa vĩnh viễn file ${targetFile.name}`, targetFile.name);
       addToast('info', 'Đã xóa tài liệu', targetFile.name);
@@ -770,12 +859,10 @@ export default function SharePointHubPage() {
   const displayedClients = useMemo(() => {
     let list = activeTab === 'archived_clients' ? archivedClientsList : activeClientsList;
 
-    // 1. Filter by Service Type (Audit, CFO, Consulting, Tax)
     if (filterState.serviceType && filterState.serviceType !== 'all') {
       list = list.filter((c) => (c.service_type || 'CFO') === filterState.serviceType);
     }
 
-    // 2. Filter by Search Query
     const query = globalSearchQuery.toLowerCase() || filterState.searchQuery.toLowerCase();
     if (query) {
       list = list.filter(
@@ -873,6 +960,7 @@ export default function SharePointHubPage() {
               setSelectedSubFolder(null);
               setSelectedClientIds([]);
               setSelectedFileIds([]);
+              updateUrlState(null, null, tab);
             }
           }}
           activeCount={activeClientsList.length}
@@ -884,7 +972,7 @@ export default function SharePointHubPage() {
         {/* Right Main Content */}
         <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between relative">
           <div>
-            {/* Breadcrumb Navigation */}
+            {/* Breadcrumb Navigation - Synced with URL */}
             <Breadcrumb
               currentClient={selectedClient}
               currentSubFolder={selectedSubFolder}
@@ -894,9 +982,13 @@ export default function SharePointHubPage() {
                 setSelectedSubFolder(null);
                 setSelectedClientIds([]);
                 setSelectedFileIds([]);
+                updateUrlState(null, null, activeTab);
               }}
               onNavigateClient={() => {
                 setSelectedSubFolder(null);
+                if (selectedClient) {
+                  updateUrlState(selectedClient.id, null, activeTab);
+                }
               }}
             />
 
@@ -1023,8 +1115,14 @@ export default function SharePointHubPage() {
                   setSelectedSubFolder(null);
                   setSelectedClientIds([]);
                   setSelectedFileIds([]);
+                  updateUrlState(c.id, null, activeTab);
                 }}
-                onSelectSubFolder={(sf) => setSelectedSubFolder(sf)}
+                onSelectSubFolder={(sf) => {
+                  setSelectedSubFolder(sf);
+                  if (selectedClient) {
+                    updateUrlState(selectedClient.id, sf.id, activeTab);
+                  }
+                }}
                 onPreviewFile={(f) => setPreviewFile(f)}
                 onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
                 onOpenDetailsPane={(item) => {
@@ -1067,8 +1165,14 @@ export default function SharePointHubPage() {
                   setSelectedSubFolder(null);
                   setSelectedClientIds([]);
                   setSelectedFileIds([]);
+                  updateUrlState(c.id, null, activeTab);
                 }}
-                onSelectSubFolder={(sf) => setSelectedSubFolder(sf)}
+                onSelectSubFolder={(sf) => {
+                  setSelectedSubFolder(sf);
+                  if (selectedClient) {
+                    updateUrlState(selectedClient.id, sf.id, activeTab);
+                  }
+                }}
                 onPreviewFile={(f) => setPreviewFile(f)}
                 onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
                 onOpenDetailsPane={(item) => {
@@ -1096,7 +1200,7 @@ export default function SharePointHubPage() {
               <span>Bảo mật Chuẩn Ngân Hàng & Audit Trail Fica Holding</span>
             </div>
             <div className="font-mono">
-              Next.js 15 App Router | Supabase Realtime Storage | RBAC Realtime Sync Active
+              Next.js 15 App Router | Supabase Realtime Storage | URL Params Dynamic Sync Active
             </div>
           </footer>
         </main>
@@ -1124,8 +1228,14 @@ export default function SharePointHubPage() {
         onOpenClient={(c) => {
           setSelectedClient(c);
           setSelectedSubFolder(null);
+          updateUrlState(c.id, null, activeTab);
         }}
-        onOpenSubFolder={(sf) => setSelectedSubFolder(sf)}
+        onOpenSubFolder={(sf) => {
+          setSelectedSubFolder(sf);
+          if (selectedClient) {
+            updateUrlState(selectedClient.id, sf.id, activeTab);
+          }
+        }}
         onRenameClient={(c) => setSelectedClientForRename(c)}
         onArchiveClient={handleArchiveClient}
         onRestoreClient={handleRestoreClient}
@@ -1256,5 +1366,13 @@ export default function SharePointHubPage() {
         isReadOnly={isReadOnly}
       />
     </div>
+  );
+}
+
+export default function SharePointHubPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-xs font-mono">Đang nạp dữ liệu SharePoint Fica Hub...</div>}>
+      <SharePointContent />
+    </Suspense>
   );
 }

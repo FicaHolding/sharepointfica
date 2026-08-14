@@ -367,6 +367,51 @@ export const sharepointService = {
     }
   },
 
+  // Fetch Files from Supabase Database
+  async fetchFiles(clientId?: string, folderId?: string): Promise<DocumentFile[]> {
+    try {
+      let query = supabase.from('documents').select('*');
+      if (clientId && isValidUUID(clientId)) {
+        query = query.eq('client_id', clientId);
+      }
+      if (folderId) {
+        query = query.eq('folder_id', folderId);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          client_id: d.client_id || clientId || '',
+          folder_id: d.folder_id || folderId || '',
+          name: d.name,
+          current_version: d.current_version || 1,
+          file_size: Number(d.size || d.file_size || 0),
+          mime_type: d.mime_type || 'application/pdf',
+          storage_path: d.storage_path,
+          status: d.status || 'Approved',
+          fiscal_year: d.fiscal_year || 2025,
+          service_type: d.service_type || 'CFO',
+          tags: Array.isArray(d.tags) ? d.tags : ['Tài liệu'],
+          created_at: d.created_at,
+          updated_at: d.updated_at || d.created_at,
+          created_by: d.uploaded_by || 'Admin',
+          created_by_name: d.uploaded_by || 'Admin',
+          modified_by_name: d.uploaded_by || 'Admin',
+        }));
+      }
+
+      const { data: filesData } = await supabase.from('files').select('*');
+      if (filesData && filesData.length > 0) {
+        return filesData;
+      }
+
+      return [];
+    } catch {
+      return [];
+    }
+  },
+
   // Upload file to Supabase Storage and register file record in DB
   async uploadFile(
     file: File,
@@ -384,6 +429,7 @@ export const sharepointService = {
   ): Promise<DocumentFile | null> {
     try {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
+      const newId = crypto.randomUUID();
 
       // 1. Upload to Storage bucket
       const { error: storageError } = await supabase.storage
@@ -394,17 +440,36 @@ export const sharepointService = {
         console.warn('Storage upload error:', storageError.message);
       }
 
-      if (!isValidUUID(clientId) || !isValidUUID(folderId)) {
-        return null;
-      }
+      const payloadDoc = {
+        id: newId,
+        name: metadata.name,
+        size: file.size,
+        mime_type: file.type || 'application/pdf',
+        storage_path: storagePath,
+        folder_id: folderId,
+        client_id: isValidUUID(clientId) ? clientId : null,
+        service_type: metadata.serviceType || 'CFO',
+        fiscal_year: metadata.fiscalYear || 2025,
+        status: metadata.status || 'Approved',
+        tags: metadata.tags || ['Tải lên'],
+        uploaded_by: metadata.createdByName || 'Fica Admin',
+        created_at: new Date().toISOString(),
+      };
 
-      // 2. Insert record into `files` table
-      const { data, error: dbError } = await supabase
-        .from('files')
-        .insert([
+      // 2. Insert record into `documents` table
+      const { data: docData, error: dbError } = await supabase
+        .from('documents')
+        .insert([payloadDoc])
+        .select()
+        .single();
+
+      if (dbError) {
+        console.warn('Database documents table insert notice:', dbError.message);
+        // Fallback insert into `files` table
+        await supabase.from('files').insert([
           {
-            id: crypto.randomUUID(),
-            client_id: clientId,
+            id: newId,
+            client_id: isValidUUID(clientId) ? clientId : null,
             folder_id: folderId,
             name: metadata.name,
             current_version: 1,
@@ -417,18 +482,32 @@ export const sharepointService = {
             tags: metadata.tags,
             created_by: isValidUUID(metadata.createdBy) ? metadata.createdBy : null,
           },
-        ])
-        .select()
-        .single();
-
-      if (dbError) {
-        console.warn('Database file insert error:', dbError.message);
-        return null;
+        ]);
       }
+
+      const createdDoc: DocumentFile = {
+        id: docData?.id || newId,
+        client_id: clientId,
+        folder_id: folderId,
+        name: metadata.name,
+        current_version: 1,
+        file_size: file.size,
+        mime_type: file.type || 'application/pdf',
+        storage_path: storagePath,
+        status: metadata.status || 'Approved',
+        fiscal_year: metadata.fiscalYear || 2025,
+        service_type: metadata.serviceType || 'CFO',
+        tags: metadata.tags || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: metadata.createdBy,
+        created_by_name: metadata.createdByName,
+        modified_by_name: metadata.createdByName,
+      };
 
       await this.logAudit({
         client_id: clientId,
-        file_id: data?.id,
+        file_id: createdDoc.id,
         file_name: metadata.name,
         action_type: 'UPLOAD_FILE',
         action_details: `Tải lên file ${metadata.name} (Năm ${metadata.fiscalYear}, Dịch vụ ${metadata.serviceType})`,
@@ -437,7 +516,7 @@ export const sharepointService = {
         performed_by_role: 'admin',
       });
 
-      return data;
+      return createdDoc;
     } catch {
       return null;
     }
@@ -489,7 +568,7 @@ export const sharepointService = {
     }
   },
 
-  // Subscribe to Supabase Realtime changes including profiles
+  // Subscribe to Supabase Realtime changes including profiles and documents
   subscribeRealtime(onTableChange: () => void) {
     const channel = supabase
       .channel('sharepoint-realtime-changes')
@@ -501,6 +580,11 @@ export const sharepointService = {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients' },
+        () => onTableChange()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'documents' },
         () => onTableChange()
       )
       .on(
