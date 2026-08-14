@@ -364,6 +364,10 @@ function SharePointContent() {
         if (dbFiles && dbFiles.length > 0) {
           setFiles(dbFiles);
         }
+        const customLogo = await sharepointService.getCompanyLogoUrl();
+        if (customLogo) {
+          setCompanyLogoUrl(customLogo);
+        }
       } catch {
         // Keep initial clients fallback
       }

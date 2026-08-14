@@ -715,7 +715,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload Company Logo to Supabase Storage with Fixed Permanent Path & 2MB Validation
+  // Upload Company Logo with Permanent Base64 Data URL Persistence (Guaranteed across F5 reloads)
   async uploadCompanyLogo(file: File): Promise<{ success: boolean; logoUrl?: string; error?: string }> {
     try {
       if (file.size > 2 * 1024 * 1024) {
@@ -728,27 +728,27 @@ export const sharepointService = {
 
       await this.ensureBucketExists();
 
-      const storagePath = `system_settings/company_logo.png`;
+      // Read file as Permanent Base64 Data URL for instant & F5 persistence
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsDataURL(file);
+      });
 
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fica_company_logo', base64Data);
+        localStorage.setItem('fica_company_logo_path', 'system_settings/company_logo.png');
+      }
+
+      // Upload to Supabase Storage in background
+      const storagePath = `system_settings/company_logo.png`;
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
       if (storageError) {
         console.warn('Storage logo upload notice:', storageError.message);
-      }
-
-      // Signed URL for Private Bucket Security
-      const res = await this.getFilePreviewOrDownloadUrl(storagePath);
-      let logoUrl = res.url;
-
-      if (!logoUrl) {
-        logoUrl = URL.createObjectURL(file);
-      }
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fica_company_logo', logoUrl);
-        localStorage.setItem('fica_company_logo_path', storagePath);
       }
 
       await this.logAudit({
@@ -758,18 +758,18 @@ export const sharepointService = {
         performed_by_role: 'admin',
       });
 
-      return { success: true, logoUrl };
+      return { success: true, logoUrl: base64Data };
     } catch (err: any) {
       console.error('Logo upload exception:', err.message);
       return { success: false, error: err.message || 'Lỗi nạp file logo' };
     }
   },
 
-  // Get Permanent Company Logo URL across reloads using Signed URLs
+  // Get Permanent Company Logo URL across F5 reloads
   async getCompanyLogoUrl(): Promise<string | null> {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('fica_company_logo');
-      if (stored && !stored.startsWith('blob:')) return stored;
+      if (stored) return stored;
     }
     try {
       const res = await this.getFilePreviewOrDownloadUrl('system_settings/company_logo.png');
