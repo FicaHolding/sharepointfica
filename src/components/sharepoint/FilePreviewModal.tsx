@@ -38,7 +38,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [httpSignedUrl, setHttpSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -61,7 +60,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setExcelHtml(null);
       setRenderSuccess(false);
       setFileUrl(null);
-      setHttpSignedUrl(null);
 
       if (!file.storage_path) {
         setLoading(false);
@@ -76,7 +74,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
         if (res.url || res.httpSignedUrl) {
           setFileUrl(res.url || res.httpSignedUrl);
-          setHttpSignedUrl(res.httpSignedUrl || null);
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa có trên Storage.');
@@ -239,30 +236,29 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     onDownload(file);
   };
 
-  // Launch Native Windows Desktop App (MS Word / MS Excel / MS PowerPoint)
+  // Open File with Native Desktop App on Windows PC (MS Word / MS Excel / Default App)
   const handleOpenNativeDesktopApp = async () => {
     if (!file) return;
 
-    const targetUrl = httpSignedUrl || fileUrl;
-
-    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-      let protocolScheme = '';
-      if (file.name.match(/\.(docx|doc)$/i)) {
-        protocolScheme = `ms-word:ofv|u=${encodeURIComponent(targetUrl)}`;
-      } else if (file.name.match(/\.(xlsx|xls)$/i)) {
-        protocolScheme = `ms-excel:ofv|u=${encodeURIComponent(targetUrl)}`;
-      } else if (file.name.match(/\.(pptx|ppt)$/i)) {
-        protocolScheme = `ms-powerpoint:ofv|u=${encodeURIComponent(targetUrl)}`;
-      }
-
-      if (protocolScheme) {
-        window.location.href = protocolScheme;
+    // Trigger clean file blob stream so Windows opens it cleanly with default installed desktop application
+    if (file.storage_path) {
+      const success = await sharepointService.downloadFileBlob(file.storage_path, file.name);
+      if (success) {
+        onDownload(file);
         return;
       }
     }
 
-    // Fallback: Trigger instant browser download so Windows opens with default desktop application
-    await handleRealDownload();
+    if (fileUrl) {
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = file.name;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      onDownload(file);
+    }
   };
 
   if (!isOpen || !file) return null;
@@ -335,11 +331,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             {(isDoc || isSpreadsheet) && (
               <button
                 onClick={handleOpenNativeDesktopApp}
-                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
-                title="Mở bằng phần mềm Microsoft Word/Excel trên máy tính"
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
+                title="Mở file trực tiếp bằng phần mềm Microsoft Word/Excel trên máy tính"
               >
                 <Laptop className="w-4 h-4" />
-                <span className="hidden sm:inline">Mở bằng MS Office (Máy tính)</span>
+                <span className="hidden sm:inline">Mở bằng phần mềm PC (Word/Excel)</span>
               </button>
             )}
 
