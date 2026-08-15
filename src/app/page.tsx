@@ -22,6 +22,9 @@ import { UserManagementModal } from '@/components/sharepoint/UserManagementModal
 import { UserProfileModal } from '@/components/sharepoint/UserProfileModal';
 import { RenameClientModal } from '@/components/sharepoint/RenameClientModal';
 import { DeleteClientModal } from '@/components/sharepoint/DeleteClientModal';
+import { NewSubfolderModal } from '@/components/sharepoint/NewSubfolderModal';
+import { RenameSubfolderModal } from '@/components/sharepoint/RenameSubfolderModal';
+import { DeleteSubfolderModal } from '@/components/sharepoint/DeleteSubfolderModal';
 import { ContextMenu, ContextMenuPosition } from '@/components/sharepoint/ContextMenu';
 import { ToastContainer, ToastMessage } from '@/components/sharepoint/ToastContainer';
 import {
@@ -411,6 +414,9 @@ function SharePointContent() {
   const [contextMenuPos, setContextMenuPos] = useState<ContextMenuPosition | null>(null);
   const [selectedClientForRename, setSelectedClientForRename] = useState<ClientFolder | null>(null);
   const [selectedClientForDelete, setSelectedClientForDelete] = useState<ClientFolder | null>(null);
+  const [isNewSubfolderModalOpen, setIsNewSubfolderModalOpen] = useState(false);
+  const [selectedSubfolderForRename, setSelectedSubfolderForRename] = useState<FolderItem | null>(null);
+  const [selectedSubfolderForDelete, setSelectedSubfolderForDelete] = useState<FolderItem | null>(null);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
   const [detailsItem, setDetailsItem] = useState<{
@@ -679,8 +685,47 @@ function SharePointContent() {
       }
       router.refresh();
       pushAuditLog('DELETE_FILE', `Xóa vĩnh viễn thư mục khách hàng ${target.folder_name}`, undefined, target.folder_name);
-      addToast('error', 'Đã xóa vĩnh viễn khỏi Database!', `Đã xóa hoàn toàn dữ liệu của ${target.folder_name}`);
     }
+  };
+
+  // SUBFOLDER MANAGEMENT HANDLERS (CREATE, RENAME, DELETE)
+  const handleCreateSubfolder = async (name: string) => {
+    if (!selectedClient) {
+      addToast('error', 'Vui lòng chọn Khách hàng trước khi tạo thư mục con!');
+      return { success: false, error: 'Chưa chọn Khách hàng' };
+    }
+
+    const res = await sharepointService.createSubFolder(selectedClient.id, name);
+    if (res.success && res.folder) {
+      addToast('success', 'Đã tạo thư mục mới thành công!', res.folder.name);
+      pushAuditLog('UPDATE_METADATA', `Tạo thư mục mới [${res.folder.name}] cho khách hàng ${selectedClient.folder_name}`, undefined, selectedClient.folder_name);
+      router.refresh();
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Lỗi tạo thư mục' };
+  };
+
+  const handleRenameSubfolder = async (folderId: string, newName: string) => {
+    const res = await sharepointService.renameSubFolder(folderId, newName);
+    if (res.success) {
+      addToast('success', 'Đã đổi tên thư mục thành công!', `Tên mới: ${newName}`);
+      pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành ${newName}`, undefined, selectedClient?.folder_name);
+      router.refresh();
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Lỗi đổi tên thư mục' };
+  };
+
+  const handleConfirmDeleteSubfolder = async (folderId: string) => {
+    const target = currentSubFolders.find((s) => s.id === folderId);
+    const success = await sharepointService.deleteSubFolder(folderId);
+    if (success) {
+      addToast('info', 'Đã xóa thư mục thành công', target?.name);
+      pushAuditLog('UPDATE_METADATA', `Xóa thư mục ${target?.name || ''}`, undefined, selectedClient?.folder_name);
+      router.refresh();
+      return true;
+    }
+    return false;
   };
 
   // REAL SUPABASE DATABASE PROFILES MANAGEMENT HANDLERS
@@ -1139,6 +1184,7 @@ function SharePointContent() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               onOpenNewClientModal={() => setIsNewClientModalOpen(true)}
+              onOpenNewSubfolderModal={() => setIsNewSubfolderModalOpen(true)}
               onOpenUploadModal={() => setIsUploadModalOpen(true)}
               onOpenFilterDrawer={() => setIsFilterDrawerOpen(true)}
               filterState={filterState}
@@ -1263,6 +1309,8 @@ function SharePointContent() {
                 onOpenContextMenu={(pos) => setContextMenuPos(pos)}
                 onRenameClientModal={(c) => setSelectedClientForRename(c)}
                 onDeleteClientModal={(c) => setSelectedClientForDelete(c)}
+                onRenameSubFolderModal={(sf) => setSelectedSubfolderForRename(sf)}
+                onDeleteSubFolderModal={(sf) => setSelectedSubfolderForDelete(sf)}
                 isReadOnly={isReadOnly}
               />
             ) : (
@@ -1434,6 +1482,27 @@ function SharePointContent() {
         defaultServiceType={
           filterState.serviceType !== 'all' ? (filterState.serviceType as ServiceType) : 'Audit'
         }
+      />
+
+      <NewSubfolderModal
+        isOpen={isNewSubfolderModalOpen}
+        onClose={() => setIsNewSubfolderModalOpen(false)}
+        onCreateSubfolder={handleCreateSubfolder}
+        clientName={selectedClient?.folder_name}
+      />
+
+      <RenameSubfolderModal
+        subFolder={selectedSubfolderForRename}
+        isOpen={!!selectedSubfolderForRename}
+        onClose={() => setSelectedSubfolderForRename(null)}
+        onRenameSubfolder={handleRenameSubfolder}
+      />
+
+      <DeleteSubfolderModal
+        subFolder={selectedSubfolderForDelete}
+        isOpen={!!selectedSubfolderForDelete}
+        onClose={() => setSelectedSubfolderForDelete(null)}
+        onConfirmDelete={handleConfirmDeleteSubfolder}
       />
 
       <UploadFileModal

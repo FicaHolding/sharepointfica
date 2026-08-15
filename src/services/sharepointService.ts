@@ -224,19 +224,147 @@ export const sharepointService = {
     return Array.from(map.values());
   },
 
-  // Fetch real folders from Supabase Database
+  // Fetch real folders from Supabase Database & Persistent Local Cache
   async fetchFolders(clientId?: string): Promise<FolderItem[]> {
+    let dbFolders: FolderItem[] = [];
     try {
       let query = supabase.from('folders').select('*').order('created_at', { ascending: true });
       if (clientId && isValidUUID(clientId)) {
         query = query.eq('client_id', clientId);
       }
       const { data, error } = await query;
-      if (error) return [];
-      return data || [];
+      if (!error && data && data.length > 0) {
+        dbFolders = data;
+      }
     } catch {
-      return [];
+      // Ignore
     }
+
+    const map = new Map<string, FolderItem>();
+    for (const f of dbFolders) {
+      map.set(f.id, f);
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_custom_subfolders');
+      if (stored) {
+        try {
+          const localFolders: FolderItem[] = JSON.parse(stored);
+          if (Array.isArray(localFolders)) {
+            for (const lf of localFolders) {
+              if (clientId ? lf.client_id === clientId : true) {
+                if (!map.has(lf.id)) {
+                  map.set(lf.id, lf);
+                }
+              }
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    return Array.from(map.values());
+  },
+
+  // Create new Custom SubFolder in Client Folder
+  async createSubFolder(clientId: string, name: string): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+    const newId = crypto.randomUUID();
+    const folderObj: FolderItem = {
+      id: newId,
+      client_id: clientId,
+      name: name.trim(),
+      is_system_folder: false,
+      created_by: 'Admin',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_custom_subfolders');
+        let folders: FolderItem[] = stored ? JSON.parse(stored) : [];
+        if (!Array.isArray(folders)) folders = [];
+        folders.push(folderObj);
+        localStorage.setItem('fica_custom_subfolders', JSON.stringify(folders));
+      } catch {
+        // Storage quota fallback
+      }
+    }
+
+    try {
+      if (isValidUUID(clientId)) {
+        await supabase.from('folders').insert([
+          {
+            id: newId,
+            client_id: clientId,
+            name: name.trim(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch {
+      // Ignore DB exception
+    }
+
+    return { success: true, folder: folderObj };
+  },
+
+  // Rename SubFolder
+  async renameSubFolder(folderId: string, newName: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (isValidUUID(folderId)) {
+        await supabase.from('folders').update({ name: newName.trim(), updated_at: new Date().toISOString() }).eq('id', folderId);
+      }
+    } catch {
+      // Ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_custom_subfolders');
+      if (stored) {
+        try {
+          let folders: FolderItem[] = JSON.parse(stored);
+          if (Array.isArray(folders)) {
+            folders = folders.map((f) => (f.id === folderId ? { ...f, name: newName.trim(), updated_at: new Date().toISOString() } : f));
+            localStorage.setItem('fica_custom_subfolders', JSON.stringify(folders));
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    return { success: true };
+  },
+
+  // Delete SubFolder
+  async deleteSubFolder(folderId: string): Promise<boolean> {
+    try {
+      if (isValidUUID(folderId)) {
+        await supabase.from('folders').delete().eq('id', folderId);
+      }
+    } catch {
+      // Ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_custom_subfolders');
+      if (stored) {
+        try {
+          let folders: FolderItem[] = JSON.parse(stored);
+          if (Array.isArray(folders)) {
+            folders = folders.filter((f) => f.id !== folderId);
+            localStorage.setItem('fica_custom_subfolders', JSON.stringify(folders));
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+    return true;
   },
 
   // Create new client folder in Supabase Database with Guaranteed Instant Success

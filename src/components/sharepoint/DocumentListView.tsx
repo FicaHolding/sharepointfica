@@ -50,6 +50,8 @@ interface DocumentListViewProps {
   onOpenContextMenu: (pos: ContextMenuPosition) => void;
   onRenameClientModal: (client: ClientFolder) => void;
   onDeleteClientModal: (client: ClientFolder) => void;
+  onRenameSubFolderModal?: (subFolder: FolderItem) => void;
+  onDeleteSubFolderModal?: (subFolder: FolderItem) => void;
   isReadOnly: boolean;
 }
 
@@ -76,6 +78,8 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   onOpenContextMenu,
   onRenameClientModal,
   onDeleteClientModal,
+  onRenameSubFolderModal,
+  onDeleteSubFolderModal,
   isReadOnly,
 }) => {
   const [activeMenuId, setActiveMenuId] = React.useState<string | null>(null);
@@ -501,47 +505,97 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
 
           {/* LEVEL 2: Render SubFolders */}
           {isSubFolderView &&
-            subFolders.map((subFolder) => (
-              <tr
-                key={subFolder.id}
-                onClick={() => onSelectSubFolder(subFolder)}
-                className="hover:bg-blue-50/60 cursor-pointer transition-colors"
-              >
-                <td className="p-3 text-center">
-                  <input type="checkbox" disabled className="rounded border-slate-300 opacity-50 cursor-not-allowed" />
-                </td>
-                <td className="p-3 min-w-0">
-                  <div className="flex items-center space-x-3 min-w-0">
-                    <div className="p-1.5 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700 shrink-0">
-                      <FolderOpen className="w-5 h-5 text-blue-600" />
+            subFolders.map((subFolder, idx) => {
+              const isNearBottom = idx >= 1 || subFolders.length <= 3;
+              return (
+                <tr
+                  key={subFolder.id}
+                  onClick={() => onSelectSubFolder(subFolder)}
+                  className="hover:bg-blue-50/60 cursor-pointer transition-colors"
+                >
+                  <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" disabled className="rounded border-slate-300 opacity-50 cursor-not-allowed" />
+                  </td>
+                  <td className="p-3 min-w-0">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className="p-1.5 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700 shrink-0">
+                        <FolderOpen className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <span className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors truncate" title={subFolder.name}>
+                        {subFolder.name}
+                      </span>
                     </div>
-                    <span className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors truncate" title={subFolder.name}>
-                      {subFolder.name}
+                  </td>
+                  <td className="p-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                    {formatDateTime(subFolder.updated_at)}
+                  </td>
+                  <td className="p-3 text-slate-600">Fica Engine</td>
+                  <td className="p-3">
+                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                      <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                      <span>Hoạt động</span>
                     </span>
-                  </div>
-                </td>
-                <td className="p-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                  {formatDateTime(subFolder.updated_at)}
-                </td>
-                <td className="p-3 text-slate-600">Fica Engine</td>
-                <td className="p-3">
-                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                    <CheckCircle2 className="w-3 h-3 text-blue-600" />
-                    <span>Mặc định</span>
-                  </span>
-                </td>
-                <td className="p-3">
-                  <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
-                    System Subfolder
-                  </span>
-                </td>
-                <td className="p-3 text-center">
-                  <button className="p-1 hover:bg-slate-200 rounded text-slate-400 cursor-not-allowed">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="p-3">
+                    <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded">
+                      Thư mục con
+                    </span>
+                  </td>
+                  <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === subFolder.id ? null : subFolder.id);
+                        }}
+                        className="p-1 hover:bg-slate-200 rounded text-slate-600 min-w-[36px] min-h-[36px] flex items-center justify-center mx-auto"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {activeMenuId === subFolder.id && (
+                        <div
+                          className={`absolute right-0 ${
+                            isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                          } w-52 bg-white border border-slate-200 rounded-xl shadow-2xl py-1.5 z-50 text-left`}
+                        >
+                          <button
+                            onClick={() => {
+                              onSelectSubFolder(subFolder);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
+                          >
+                            <FolderOpen className="w-4 h-4 text-blue-600" />
+                            <span>Mở thư mục</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              onRenameSubFolderModal?.(subFolder);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
+                          >
+                            <Edit3 className="w-4 h-4 text-blue-600" />
+                            <span>Đổi tên thư mục</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              onDeleteSubFolderModal?.(subFolder);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2.5 font-medium border-t border-slate-100 mt-1 pt-1.5"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                            <span>Xóa thư mục</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
 
           {/* LEVEL 3: Render Document Files */}
           {isFileView &&

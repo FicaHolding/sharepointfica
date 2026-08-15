@@ -20,6 +20,7 @@ interface DocumentToolbarProps {
   viewMode: 'list' | 'grid';
   onViewModeChange: (mode: 'list' | 'grid') => void;
   onOpenNewClientModal: () => void;
+  onOpenNewSubfolderModal?: () => void;
   onOpenUploadModal: () => void;
   onOpenFilterDrawer: () => void;
   filterState: MetadataFilterState;
@@ -37,6 +38,7 @@ export const DocumentToolbar: React.FC<DocumentToolbarProps> = ({
   viewMode,
   onViewModeChange,
   onOpenNewClientModal,
+  onOpenNewSubfolderModal,
   onOpenUploadModal,
   onOpenFilterDrawer,
   filterState,
@@ -71,6 +73,18 @@ export const DocumentToolbar: React.FC<DocumentToolbarProps> = ({
           <span className="hidden sm:inline">Tạo KH mới</span>
           <span className="sm:hidden">Tạo KH</span>
         </button>
+
+        {/* Create Custom Subfolder when inside a Client */}
+        {selectedClientName && (
+          <button
+            onClick={onOpenNewSubfolderModal}
+            disabled={isReadOnly || !canModify}
+            className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:text-slate-500 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-xs transition-all min-h-[44px]"
+          >
+            <FolderPlus className="w-4 h-4" />
+            <span>+ Tạo thư mục mới</span>
+          </button>
+        )}
 
         {/* Upload File */}
         <button
