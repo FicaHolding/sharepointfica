@@ -14,6 +14,7 @@ import { NewClientModal } from '@/components/sharepoint/NewClientModal';
 import { UploadFileModal } from '@/components/sharepoint/UploadFileModal';
 import { FloatingActionBar } from '@/components/sharepoint/FloatingActionBar';
 import { FilePreviewModal } from '@/components/sharepoint/FilePreviewModal';
+import { PreviewErrorBoundary } from '@/components/sharepoint/PreviewErrorBoundary';
 import { DetailsPane } from '@/components/sharepoint/DetailsPane';
 import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
 import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
@@ -1465,12 +1466,14 @@ function SharePointContent() {
         }
       />
 
-      <FilePreviewModal
-        file={previewFile}
-        isOpen={!!previewFile}
-        onClose={() => setPreviewFile(null)}
-        onDownload={(f) => addToast('info', 'Đang tải file...', f.name)}
-      />
+      <PreviewErrorBoundary onReset={() => setPreviewFile(null)}>
+        <FilePreviewModal
+          file={previewFile}
+          isOpen={!!previewFile}
+          onClose={() => setPreviewFile(null)}
+          onDownload={(f) => addToast('info', 'Đang tải file...', f.name)}
+        />
+      </PreviewErrorBoundary>
 
       <DetailsPane
         isOpen={isDetailsPaneOpen}
