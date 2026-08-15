@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Loader2,
   AlertTriangle,
+  Laptop,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { renderAsync } from 'docx-preview';
@@ -37,6 +38,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [httpSignedUrl, setHttpSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -59,6 +61,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setExcelHtml(null);
       setRenderSuccess(false);
       setFileUrl(null);
+      setHttpSignedUrl(null);
 
       if (!file.storage_path) {
         setLoading(false);
@@ -73,6 +76,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
         if (res.url || res.httpSignedUrl) {
           setFileUrl(res.url || res.httpSignedUrl);
+          setHttpSignedUrl(res.httpSignedUrl || null);
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa có trên Storage.');
@@ -235,6 +239,32 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     onDownload(file);
   };
 
+  // Launch Native Windows Desktop App (MS Word / MS Excel / MS PowerPoint)
+  const handleOpenNativeDesktopApp = async () => {
+    if (!file) return;
+
+    const targetUrl = httpSignedUrl || fileUrl;
+
+    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      let protocolScheme = '';
+      if (file.name.match(/\.(docx|doc)$/i)) {
+        protocolScheme = `ms-word:ofv|u=${encodeURIComponent(targetUrl)}`;
+      } else if (file.name.match(/\.(xlsx|xls)$/i)) {
+        protocolScheme = `ms-excel:ofv|u=${encodeURIComponent(targetUrl)}`;
+      } else if (file.name.match(/\.(pptx|ppt)$/i)) {
+        protocolScheme = `ms-powerpoint:ofv|u=${encodeURIComponent(targetUrl)}`;
+      }
+
+      if (protocolScheme) {
+        window.location.href = protocolScheme;
+        return;
+      }
+    }
+
+    // Fallback: Trigger instant browser download so Windows opens with default desktop application
+    await handleRealDownload();
+  };
+
   if (!isOpen || !file) return null;
 
   return (
@@ -299,8 +329,20 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </button>
           </div>
 
-          {/* Right: Download & Close */}
+          {/* Right: Native App Launcher & Download & Close */}
           <div className="flex items-center space-x-2 shrink-0">
+            {/* Native Desktop Software Launcher Button */}
+            {(isDoc || isSpreadsheet) && (
+              <button
+                onClick={handleOpenNativeDesktopApp}
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
+                title="Mở bằng phần mềm Microsoft Word/Excel trên máy tính"
+              >
+                <Laptop className="w-4 h-4" />
+                <span className="hidden sm:inline">Mở bằng MS Office (Máy tính)</span>
+              </button>
+            )}
+
             {fileUrl && !hasStorageError && (
               <a
                 href={fileUrl}
@@ -428,7 +470,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     <FileText className="w-4 h-4 text-blue-600" />
                     <span>NỘI DUNG TÀI LIỆU WORD (NATIVE DOCX PREVIEW)</span>
                   </span>
-                  <span className="font-mono text-[11px]">{file.name}</span>
+                  <button
+                    onClick={handleOpenNativeDesktopApp}
+                    className="text-emerald-700 hover:text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 flex items-center space-x-1"
+                  >
+                    <Laptop className="w-3.5 h-3.5" />
+                    <span>Mở bằng MS Word trên PC →</span>
+                  </button>
                 </div>
 
                 {/* docx-preview Container */}
@@ -459,7 +507,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                     <span>NỘI DUNG BẢNG TÍNH EXCEL (NATIVE XLSX PREVIEW)</span>
                   </span>
-                  <span className="font-mono text-[11px]">{file.name}</span>
+                  <button
+                    onClick={handleOpenNativeDesktopApp}
+                    className="text-emerald-700 hover:text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 flex items-center space-x-1"
+                  >
+                    <Laptop className="w-3.5 h-3.5" />
+                    <span>Mở bằng MS Excel trên PC →</span>
+                  </button>
                 </div>
 
                 <div
@@ -484,11 +538,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
               <div className="flex items-center justify-center space-x-2 pt-2">
                 <button
+                  onClick={handleOpenNativeDesktopApp}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-md text-xs min-h-[44px] flex items-center space-x-2"
+                >
+                  <Laptop className="w-4 h-4" />
+                  <span>Mở bằng Phần mềm Máy tính (PC)</span>
+                </button>
+                <button
                   onClick={handleRealDownload}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-md text-xs min-h-[44px] flex items-center space-x-2"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Tải file gốc xuống</span>
+                  <span>Tải file gốc</span>
                 </button>
               </div>
             </div>
