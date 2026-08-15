@@ -998,7 +998,7 @@ function SharePointContent() {
       );
     }
 
-    if (filterState.serviceType !== 'all') {
+    if (filterState.serviceType !== 'all' && !selectedSubFolder) {
       list = list.filter((f) => f.service_type === filterState.serviceType);
     }
     if (filterState.status !== 'all') {
