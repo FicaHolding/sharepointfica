@@ -665,55 +665,81 @@ export const sharepointService = {
   },
 
   // Centralized helper retrieving file preview/download URL via Signed URL or Persistent Local Blob Cache
-  async getFilePreviewOrDownloadUrl(storagePath: string): Promise<{ url: string | null; isSigned: boolean; error?: string }> {
+  async getFilePreviewOrDownloadUrl(storagePath: string): Promise<{
+    url: string | null;
+    httpSignedUrl: string | null;
+    isSigned: boolean;
+    error?: string;
+  }> {
     try {
       if (!storagePath) {
-        return { url: null, isSigned: false, error: 'Thiếu đường dẫn storage_path' };
+        return { url: null, httpSignedUrl: null, isSigned: false, error: 'Thiếu đường dẫn storage_path' };
       }
 
       const cleanPath = storagePath.replace(/^\/+/, '');
 
-      // Check memory cache first
-      if (memoryFileCache.has(cleanPath)) {
-        return { url: memoryFileCache.get(cleanPath)!, isSigned: false };
-      }
-      if (memoryFileCache.has(storagePath)) {
-        return { url: memoryFileCache.get(storagePath)!, isSigned: false };
+      // Always try to generate a real HTTP Signed URL from Supabase Storage for external viewers
+      let httpSignedUrl: string | null = null;
+      try {
+        const { data: signedData, error: signedError } = await supabase.storage
+          .from(SUPABASE_STORAGE_BUCKET)
+          .createSignedUrl(cleanPath, 3600);
+
+        if (!signedError && signedData?.signedUrl) {
+          httpSignedUrl = signedData.signedUrl;
+        } else {
+          const { data: publicData } = supabase.storage
+            .from(SUPABASE_STORAGE_BUCKET)
+            .getPublicUrl(cleanPath);
+          if (publicData?.publicUrl) {
+            httpSignedUrl = publicData.publicUrl;
+          }
+        }
+      } catch {
+        // Ignore storage signed url errors
       }
 
-      // Check LocalStorage cache second
+      // Check memory cache for instant local display
+      if (memoryFileCache.has(cleanPath)) {
+        return {
+          url: memoryFileCache.get(cleanPath)!,
+          httpSignedUrl: httpSignedUrl,
+          isSigned: false,
+        };
+      }
+      if (memoryFileCache.has(storagePath)) {
+        return {
+          url: memoryFileCache.get(storagePath)!,
+          httpSignedUrl: httpSignedUrl,
+          isSigned: false,
+        };
+      }
+
+      // Check LocalStorage cache for instant local display
       if (typeof window !== 'undefined') {
         const cached = localStorage.getItem(`fica_doc_data_${cleanPath}`) || localStorage.getItem(`fica_doc_data_${storagePath}`);
         if (cached) {
-          return { url: cached, isSigned: false };
+          return {
+            url: cached,
+            httpSignedUrl: httpSignedUrl,
+            isSigned: false,
+          };
         }
       }
 
-      // Check Signed URL from Supabase Private Storage
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .createSignedUrl(cleanPath, 3600);
-
-      if (!signedError && signedData?.signedUrl) {
-        return { url: signedData.signedUrl, isSigned: true };
-      }
-
-      const { data: publicData } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl(cleanPath);
-
-      if (publicData?.publicUrl) {
-        return { url: publicData.publicUrl, isSigned: false };
+      if (httpSignedUrl) {
+        return { url: httpSignedUrl, httpSignedUrl: httpSignedUrl, isSigned: true };
       }
 
       return {
         url: null,
+        httpSignedUrl: null,
         isSigned: false,
         error: `File vật lý chưa có trên Storage (Cần tải lên lại file)`,
       };
     } catch (err: any) {
       console.warn('Storage Signed URL fetch error:', err.message);
-      return { url: null, isSigned: false, error: err.message || 'Lỗi truy cập Supabase Storage' };
+      return { url: null, httpSignedUrl: null, isSigned: false, error: err.message || 'Lỗi truy cập Supabase Storage' };
     }
   },
 

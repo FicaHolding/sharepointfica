@@ -65,9 +65,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         // Retrieve Signed URL / Local Blob URL
         const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
 
-        if (res.url) {
-          setFileUrl(res.url);
-          setSignedUrlForOffice(res.url);
+        if (res.url || res.httpSignedUrl) {
+          setFileUrl(res.url || res.httpSignedUrl);
+          setSignedUrlForOffice(res.httpSignedUrl);
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa có trên Storage.');
@@ -133,9 +133,16 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     onDownload(file);
   };
 
-  // Build Encoded Office Online Viewer URL
-  const officeOnlineViewerUrl = signedUrlForOffice
-    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrlForOffice)}`
+  // Build Encoded Office Online Viewer URL (STRICTLY REQUIRE HTTP/HTTPS PUBLIC URL)
+  const isValidHttpUrl = Boolean(
+    signedUrlForOffice &&
+      (signedUrlForOffice.startsWith('http://') || signedUrlForOffice.startsWith('https://')) &&
+      !signedUrlForOffice.startsWith('data:') &&
+      !signedUrlForOffice.startsWith('blob:')
+  );
+
+  const officeOnlineViewerUrl = isValidHttpUrl
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrlForOffice!)}`
     : null;
 
   return (
