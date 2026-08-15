@@ -85,20 +85,35 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
     file?: DocumentFile;
   } | null>(null);
 
+  const formatDateTime = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const hours = d.getHours().toString().padStart(2, '0');
+      const minutes = d.getMinutes().toString().padStart(2, '0');
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      const year = d.getFullYear();
+      return `${hours}:${minutes} ${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const getFileIcon = (mimeType: string, name: string) => {
     if (name.endsWith('.pdf') || mimeType.includes('pdf')) {
-      return <FileText className="w-6 h-6 text-red-500" />;
+      return <FileText className="w-6 h-6 text-red-500 shrink-0" />;
     }
     if (name.endsWith('.xlsx') || name.endsWith('.xls') || mimeType.includes('excel') || mimeType.includes('spreadsheet')) {
-      return <FileSpreadsheet className="w-6 h-6 text-emerald-600" />;
+      return <FileSpreadsheet className="w-6 h-6 text-emerald-600 shrink-0" />;
     }
     if (name.endsWith('.docx') || name.endsWith('.doc') || mimeType.includes('word')) {
-      return <FileText className="w-6 h-6 text-blue-600" />;
+      return <FileText className="w-6 h-6 text-blue-600 shrink-0" />;
     }
     if (mimeType.includes('image')) {
-      return <ImageIcon className="w-6 h-6 text-purple-500" />;
+      return <ImageIcon className="w-6 h-6 text-purple-500 shrink-0" />;
     }
-    return <FileCode className="w-6 h-6 text-slate-500" />;
+    return <FileCode className="w-6 h-6 text-slate-500 shrink-0" />;
   };
 
   const getStatusBadge = (status: FileStatus | 'active' | 'archived') => {
@@ -161,7 +176,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   const isAllSelected = allCount > 0 && selectedCount === allCount;
 
   return (
-    <div className="bg-white border-t border-slate-200 shadow-xs select-none">
+    <div className="bg-white border-t border-slate-200 shadow-xs select-none overflow-hidden">
       {/* MOBILE CARD VIEW FOR SMARTPHONES (< md) */}
       <div className="block md:hidden space-y-3 p-3 bg-slate-100 pb-20">
         {/* Render Mobile Client Cards */}
@@ -183,7 +198,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                       <Folder className="w-6 h-6 fill-amber-400 text-amber-600" />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-slate-900 text-sm truncate">{client.folder_name}</h4>
+                      <h4 className="font-bold text-slate-900 text-sm truncate" title={client.folder_name}>
+                        {client.folder_name}
+                      </h4>
                       <p className="text-[11px] text-slate-500 font-mono">Mã KH: {client.code}</p>
                     </div>
                   </div>
@@ -201,15 +218,12 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
 
                 {/* Row 2: Badges */}
                 <div className="flex items-center space-x-2">
-                  <span className="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px] font-mono border border-blue-200">
-                    {client.service_type || 'CFO'}
-                  </span>
                   {getStatusBadge(client.status)}
                 </div>
 
                 {/* Row 3: Meta Info */}
                 <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
-                  <span>Cập nhật: {new Date(client.updated_at).toLocaleDateString('vi-VN')}</span>
+                  <span>Cập nhật: {formatDateTime(client.updated_at)}</span>
                   <span>Tạo bởi: {client.created_by_name || 'Admin'}</span>
                 </div>
               </div>
@@ -256,7 +270,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <div className="shrink-0">{getFileIcon(file.mime_type, file.name)}</div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-slate-900 text-xs md:text-sm leading-snug line-clamp-2">
+                      <h4 className="font-bold text-slate-900 text-xs md:text-sm leading-snug truncate" title={file.name}>
                         {file.name}
                       </h4>
                       <p className="text-[11px] text-slate-500 font-mono mt-0.5">
@@ -276,14 +290,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   </button>
                 </div>
 
-                {/* Row 2: Service Type & Status Badges */}
-                <div className="flex items-center space-x-2">
-                  <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded text-[10px] border border-indigo-200">
-                    {file.service_type}
-                  </span>
-                  <span className="bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded text-[10px]">
-                    Năm {file.fiscal_year}
-                  </span>
+                {/* Row 2: Status Badge & Date */}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-500">
+                  <span>Cập nhật: {formatDateTime(file.updated_at)}</span>
                   {getStatusBadge(file.status)}
                 </div>
 
@@ -323,7 +332,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
       </div>
 
       {/* DESKTOP MULTI-COLUMN TABLE VIEW (Hidden on Mobile < md) */}
-      <table className="hidden md:table w-full text-left text-xs border-collapse">
+      <table className="hidden md:table w-full text-left text-xs border-collapse table-fixed">
         {/* Table Header */}
         <thead>
           <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold select-none">
@@ -335,12 +344,11 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
             </th>
-            <th className="p-3 min-w-[280px]">Tên Tài liệu / Thư mục</th>
-            <th className="p-3 min-w-[130px]">Phân loại / Năm</th>
-            <th className="p-3 min-w-[130px]">Cập nhật lần cuối</th>
-            <th className="p-3 min-w-[120px]">Người cập nhật</th>
-            <th className="p-3 min-w-[110px]">Trạng thái</th>
-            <th className="p-3 min-w-[150px]">Thẻ Tag</th>
+            <th className="p-3 w-auto min-w-[240px]">Tên Tài liệu / Thư mục</th>
+            <th className="p-3 w-36">Cập nhật lần cuối</th>
+            <th className="p-3 w-32">Người cập nhật</th>
+            <th className="p-3 w-28">Trạng thái</th>
+            <th className="p-3 w-40">Thẻ Tag</th>
             <th className="p-3 w-20 text-center">Thao tác</th>
           </tr>
         </thead>
@@ -371,35 +379,30 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-1.5 rounded-lg bg-amber-100/80 border border-amber-200 text-amber-700">
+                  <td className="p-3 min-w-0">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className="p-1.5 rounded-lg bg-amber-100/80 border border-amber-200 text-amber-700 shrink-0">
                         <Folder className="w-5 h-5 fill-amber-400 text-amber-600" />
                       </div>
-                      <div>
-                        <div className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors flex items-center space-x-2">
-                          <span>{client.folder_name}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors flex items-center space-x-2 truncate" title={client.folder_name}>
+                          <span className="truncate">{client.folder_name}</span>
                           {client.status === 'archived' && (
-                            <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-mono font-normal">
+                            <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-mono font-normal shrink-0">
                               Read-Only
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 font-normal">
+                        <p className="text-[11px] text-slate-500 font-normal truncate">
                           Mã KH: {client.code} | {client.total_files_count || 4} thư mục con
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="p-3">
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-mono border border-slate-200">
-                      {client.service_type || 'CFO'}
-                    </span>
+                  <td className="p-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                    {formatDateTime(client.updated_at)}
                   </td>
-                  <td className="p-3 text-slate-600 font-mono text-[11px]">
-                    {new Date(client.updated_at).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td className="p-3 text-slate-600">{client.created_by_name || 'Admin'}</td>
+                  <td className="p-3 text-slate-600 truncate">{client.created_by_name || 'Admin'}</td>
                   <td className="p-3">{getStatusBadge(client.status)}</td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1">
@@ -448,7 +451,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               className="w-full px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 flex items-center space-x-2"
                             >
                               <Archive className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Archive Hồ sơ</span>
+                              <span>Chuyển vào Kho lưu trữ</span>
                             </button>
                           ) : (
                             <button
@@ -459,7 +462,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               className="w-full px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2"
                             >
                               <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Khôi phục Active</span>
+                              <span>Khôi phục thư mục</span>
                             </button>
                           )}
                           <button
@@ -469,7 +472,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             }}
                             className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 border-t border-slate-100"
                           >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
                             <span>Xóa thư mục</span>
                           </button>
                         </div>
@@ -480,7 +483,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
               );
             })}
 
-          {/* LEVEL 2: Render Client Subfolders */}
+          {/* LEVEL 2: Render SubFolders */}
           {isSubFolderView &&
             subFolders.map((subFolder) => (
               <tr
@@ -489,21 +492,20 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 className="hover:bg-blue-50/60 cursor-pointer transition-colors"
               >
                 <td className="p-3 text-center">
-                  <input type="checkbox" disabled className="rounded border-slate-300 opacity-40 cursor-not-allowed" />
+                  <input type="checkbox" disabled className="rounded border-slate-300 opacity-50 cursor-not-allowed" />
                 </td>
-                <td className="p-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-1.5 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700">
+                <td className="p-3 min-w-0">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="p-1.5 rounded-lg bg-blue-100/80 border border-blue-200 text-blue-700 shrink-0">
                       <FolderOpen className="w-5 h-5 text-blue-600" />
                     </div>
-                    <span className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors">
+                    <span className="font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors truncate" title={subFolder.name}>
                       {subFolder.name}
                     </span>
                   </div>
                 </td>
-                <td className="p-3 text-slate-500 text-[11px]">Thư mục hệ thống</td>
-                <td className="p-3 text-slate-600 font-mono text-[11px]">
-                  {new Date(subFolder.updated_at).toLocaleDateString('vi-VN')}
+                <td className="p-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                  {formatDateTime(subFolder.updated_at)}
                 </td>
                 <td className="p-3 text-slate-600">Fica Engine</td>
                 <td className="p-3">
@@ -549,11 +551,14 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                       className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center space-x-3">
+                  <td className="p-3 min-w-0">
+                    <div className="flex items-center space-x-3 min-w-0">
                       <div className="shrink-0">{getFileIcon(file.mime_type, file.name)}</div>
-                      <div>
-                        <div className="font-bold text-slate-900 text-xs md:text-sm hover:text-blue-600 transition-colors line-clamp-1">
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="font-bold text-slate-900 text-xs md:text-sm hover:text-blue-600 transition-colors truncate"
+                          title={file.name}
+                        >
                           {file.name}
                         </div>
                         <p className="text-[11px] text-slate-500 font-mono font-normal">
@@ -562,20 +567,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                       </div>
                     </div>
                   </td>
-                  <td className="p-3">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded text-[11px] border border-indigo-200">
-                        {file.service_type}
-                      </span>
-                      <span className="bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded text-[11px] border border-slate-200">
-                        {file.fiscal_year}
-                      </span>
-                    </div>
+                  <td className="p-3 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                    {formatDateTime(file.updated_at)}
                   </td>
-                  <td className="p-3 text-slate-600 font-mono text-[11px]">
-                    {new Date(file.updated_at).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td className="p-3 text-slate-600">{file.created_by_name || 'Admin'}</td>
+                  <td className="p-3 text-slate-600 truncate">{file.created_by_name || 'Admin'}</td>
                   <td className="p-3">{getStatusBadge(file.status)}</td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1">
@@ -600,7 +595,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                       </button>
 
                       {activeMenuId === file.id && (
-                        <div className="absolute right-0 mt-1 w-52 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
+                        <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
                           <button
                             onClick={() => {
                               onPreviewFile(file);
@@ -609,9 +604,8 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
                             <Eye className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Xem trước file (Preview)</span>
+                            <span>Xem trước file</span>
                           </button>
-
                           <button
                             onClick={() => {
                               onOpenDetailsPane({ file });
@@ -620,9 +614,8 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
                             <Info className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Thông tin chi tiết</span>
+                            <span>Xem chi tiết Metadata</span>
                           </button>
-
                           <button
                             onClick={() => {
                               onDownloadFile(file);
@@ -630,10 +623,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             }}
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
-                            <Download className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Tải xuống (Download)</span>
+                            <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Tải xuống file</span>
                           </button>
-
                           <button
                             onClick={() => {
                               onOpenVersionHistory(file);
@@ -641,10 +633,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                             }}
                             className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
                           >
-                            <History className="w-3.5 h-3.5 text-purple-600" />
+                            <History className="w-3.5 h-3.5 text-indigo-600" />
                             <span>Lịch sử phiên bản</span>
                           </button>
-
                           {!isReadOnly && (
                             <button
                               onClick={() => {
@@ -653,8 +644,8 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               }}
                               className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 border-t border-slate-100"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              <span>Xóa tài liệu</span>
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              <span>Xóa file</span>
                             </button>
                           )}
                         </div>
@@ -664,175 +655,8 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 </tr>
               );
             })}
-
-          {/* Empty states Desktop */}
-          {isFolderView && clients.length === 0 && (
-            <tr>
-              <td colSpan={8} className="p-8 text-center text-slate-500">
-                <Folder className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                <p className="font-semibold text-slate-700">Chưa có khách hàng nào</p>
-              </td>
-            </tr>
-          )}
-
-          {isFileView && files.length === 0 && (
-            <tr>
-              <td colSpan={8} className="p-8 text-center text-slate-500">
-                <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                <p className="font-semibold text-slate-700">Thư mục trống</p>
-                <p className="text-xs text-slate-400">Kéo & Thả file từ máy tính vào đây để tự động Upload.</p>
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
-
-      {/* MOBILE ACTION BOTTOM SHEET (Pulls up from bottom for easy tap targets) */}
-      {mobileActionItem && (
-        <div className="fixed inset-0 z-50 md:hidden flex items-end animate-in fade-in">
-          <div
-            onClick={() => setMobileActionItem(null)}
-            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs"
-          />
-          <div className="relative w-full bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl p-4 space-y-3 z-50 animate-in slide-in-from-bottom-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-sm truncate max-w-[280px]">
-                {mobileActionItem.file?.name || mobileActionItem.client?.folder_name}
-              </h3>
-              <button
-                onClick={() => setMobileActionItem(null)}
-                className="p-1 text-slate-400 hover:text-slate-900 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-1 py-1">
-              {mobileActionItem.file && (
-                <>
-                  <button
-                    onClick={() => {
-                      onPreviewFile(mobileActionItem.file!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <Eye className="w-5 h-5 text-blue-600" />
-                    <span>Xem trước file (Preview)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onOpenDetailsPane({ file: mobileActionItem.file });
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <Info className="w-5 h-5 text-blue-600" />
-                    <span>Xem thông tin chi tiết</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onDownloadFile(mobileActionItem.file!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <Download className="w-5 h-5 text-blue-600" />
-                    <span>Tải về máy (Download)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onOpenVersionHistory(mobileActionItem.file!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <History className="w-5 h-5 text-purple-600" />
-                    <span>Lịch sử phiên bản</span>
-                  </button>
-
-                  {!isReadOnly && (
-                    <button
-                      onClick={() => {
-                        onDeleteFile(mobileActionItem.file!.id);
-                        setMobileActionItem(null);
-                      }}
-                      className="w-full text-left px-3 py-3 text-red-600 font-semibold hover:bg-red-50 rounded-xl flex items-center space-x-3 min-h-[48px] border-t border-slate-100"
-                    >
-                      <Trash2 className="w-5 h-5 text-red-500" />
-                      <span>Xóa tài liệu</span>
-                    </button>
-                  )}
-                </>
-              )}
-
-              {mobileActionItem.client && (
-                <>
-                  <button
-                    onClick={() => {
-                      onSelectClient(mobileActionItem.client!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <FolderOpen className="w-5 h-5 text-blue-600" />
-                    <span>Mở thư mục khách hàng</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      onRenameClientModal(mobileActionItem.client!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-slate-800 font-semibold hover:bg-slate-100 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                  >
-                    <Edit3 className="w-5 h-5 text-blue-600" />
-                    <span>Đổi tên thư mục</span>
-                  </button>
-
-                  {mobileActionItem.client.status === 'active' ? (
-                    <button
-                      onClick={() => {
-                        onArchiveClient(mobileActionItem.client!);
-                        setMobileActionItem(null);
-                      }}
-                      className="w-full text-left px-3 py-3 text-amber-800 font-semibold hover:bg-amber-50 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                    >
-                      <Archive className="w-5 h-5 text-amber-600" />
-                      <span>Archive Hồ sơ</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        onRestoreClient(mobileActionItem.client!);
-                        setMobileActionItem(null);
-                      }}
-                      className="w-full text-left px-3 py-3 text-emerald-800 font-semibold hover:bg-emerald-50 rounded-xl flex items-center space-x-3 min-h-[48px]"
-                    >
-                      <RotateCcw className="w-5 h-5 text-emerald-600" />
-                      <span>Khôi phục Active</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      onDeleteClientModal(mobileActionItem.client!);
-                      setMobileActionItem(null);
-                    }}
-                    className="w-full text-left px-3 py-3 text-red-600 font-semibold hover:bg-red-50 rounded-xl flex items-center space-x-3 min-h-[48px] border-t border-slate-100"
-                  >
-                    <Trash2 className="w-5 h-5 text-red-500" />
-                    <span>Xóa thư mục</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
