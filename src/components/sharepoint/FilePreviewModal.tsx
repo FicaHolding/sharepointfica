@@ -209,6 +209,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     onDownload(file);
   };
 
+  if (!isOpen || !file) return null;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 select-none animate-fade-in">
       <div className="w-full max-w-6xl h-[92vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
