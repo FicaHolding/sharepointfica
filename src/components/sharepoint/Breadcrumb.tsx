@@ -20,7 +20,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({
   onNavigateClient,
 }) => {
   return (
-    <div className="bg-white border-b border-slate-200 shadow-xs select-none sticky top-14 z-20">
+    <div className="bg-white border-b border-slate-200 shadow-xs select-none sticky top-0 z-20">
       {/* Desktop Breadcrumb View (Hidden on mobile < md) */}
       <div className="hidden md:flex items-center space-x-2 text-xs text-slate-600 px-4 py-2">
         <button

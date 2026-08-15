@@ -547,7 +547,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
           {isFileView &&
             files.map((file, idx) => {
               const isSelected = selectedFileIds.includes(file.id);
-              const isNearBottom = idx >= files.length - 2 && files.length >= 2;
+              const isNearBottom = idx >= 1 || files.length <= 3;
 
               return (
                 <tr
@@ -619,7 +619,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                         <div
                           className={`absolute right-0 ${
                             isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
-                          } w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left`}
+                          } w-52 bg-white border border-slate-200 rounded-xl shadow-2xl py-1.5 z-50 text-left max-h-72 overflow-y-auto`}
                         >
                           <button
                             onClick={() => {
