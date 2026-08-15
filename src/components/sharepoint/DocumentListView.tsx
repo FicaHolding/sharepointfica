@@ -85,6 +85,13 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
     file?: DocumentFile;
   } | null>(null);
 
+  // Close active dropdown menu when clicking anywhere outside
+  React.useEffect(() => {
+    const handleGlobalClick = () => setActiveMenuId(null);
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
   const formatDateTime = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -176,7 +183,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   const isAllSelected = allCount > 0 && selectedCount === allCount;
 
   return (
-    <div className="bg-white border-t border-slate-200 shadow-xs select-none overflow-hidden">
+    <div className="bg-white border-t border-slate-200 shadow-xs select-none overflow-visible pb-24">
       {/* MOBILE CARD VIEW FOR SMARTPHONES (< md) */}
       <div className="block md:hidden space-y-3 p-3 bg-slate-100 pb-20">
         {/* Render Mobile Client Cards */}
@@ -357,8 +364,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
         <tbody className="divide-y divide-slate-100 text-slate-800 font-medium">
           {/* LEVEL 1: Render Root Client Folders */}
           {isFolderView &&
-            clients.map((client) => {
+            clients.map((client, idx) => {
               const isSelected = selectedClientIds.includes(client.id);
+              const isNearBottom = idx >= clients.length - 2 && clients.length >= 2;
+
               return (
                 <tr
                   key={client.id}
@@ -414,22 +423,29 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="relative">
                       <button
-                        onClick={() => setActiveMenuId(activeMenuId === client.id ? null : client.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === client.id ? null : client.id);
+                        }}
                         className="p-1 hover:bg-slate-200 rounded text-slate-600 min-w-[36px] min-h-[36px] flex items-center justify-center mx-auto"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
                       {activeMenuId === client.id && (
-                        <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
+                        <div
+                          className={`absolute right-0 ${
+                            isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                          } w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left`}
+                        >
                           <button
                             onClick={() => {
                               onSelectClient(client);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <FolderOpen className="w-3.5 h-3.5 text-blue-600" />
+                            <FolderOpen className="w-4 h-4 text-blue-600" />
                             <span>Mở thư mục</span>
                           </button>
                           <button
@@ -437,9 +453,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               onRenameClientModal(client);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                            <Edit3 className="w-4 h-4 text-blue-600" />
                             <span>Đổi tên thư mục</span>
                           </button>
                           {client.status === 'active' ? (
@@ -448,9 +464,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                                 onArchiveClient(client);
                                 setActiveMenuId(null);
                               }}
-                              className="w-full px-3 py-1.5 text-xs text-amber-700 hover:bg-amber-50 flex items-center space-x-2"
+                              className="w-full px-3.5 py-2 text-xs text-amber-700 hover:bg-amber-50 flex items-center space-x-2.5 font-medium"
                             >
-                              <Archive className="w-3.5 h-3.5 text-amber-600" />
+                              <Archive className="w-4 h-4 text-amber-600" />
                               <span>Chuyển vào Kho lưu trữ</span>
                             </button>
                           ) : (
@@ -459,9 +475,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                                 onRestoreClient(client);
                                 setActiveMenuId(null);
                               }}
-                              className="w-full px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2"
+                              className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2.5 font-medium"
                             >
-                              <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+                              <RotateCcw className="w-4 h-4 text-emerald-600" />
                               <span>Khôi phục thư mục</span>
                             </button>
                           )}
@@ -470,9 +486,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               onDeleteClientModal(client);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 border-t border-slate-100"
+                            className="w-full px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2.5 font-medium border-t border-slate-100 mt-1 pt-1.5"
                           >
-                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                            <Trash2 className="w-4 h-4 text-red-600" />
                             <span>Xóa thư mục</span>
                           </button>
                         </div>
@@ -529,8 +545,10 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
 
           {/* LEVEL 3: Render Document Files */}
           {isFileView &&
-            files.map((file) => {
+            files.map((file, idx) => {
               const isSelected = selectedFileIds.includes(file.id);
+              const isNearBottom = idx >= files.length - 2 && files.length >= 2;
+
               return (
                 <tr
                   key={file.id}
@@ -588,22 +606,29 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                   <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="relative">
                       <button
-                        onClick={() => setActiveMenuId(activeMenuId === file.id ? null : file.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === file.id ? null : file.id);
+                        }}
                         className="p-1 hover:bg-slate-200 rounded text-slate-600 min-w-[36px] min-h-[36px] flex items-center justify-center mx-auto"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
                       {activeMenuId === file.id && (
-                        <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50 text-left">
+                        <div
+                          className={`absolute right-0 ${
+                            isNearBottom ? 'bottom-full mb-1' : 'top-full mt-1'
+                          } w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left`}
+                        >
                           <button
                             onClick={() => {
                               onPreviewFile(file);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <Eye className="w-3.5 h-3.5 text-blue-600" />
+                            <Eye className="w-4 h-4 text-blue-600" />
                             <span>Xem trước file</span>
                           </button>
                           <button
@@ -611,9 +636,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               onOpenDetailsPane({ file });
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <Info className="w-3.5 h-3.5 text-blue-600" />
+                            <Info className="w-4 h-4 text-blue-600" />
                             <span>Xem chi tiết Metadata</span>
                           </button>
                           <button
@@ -621,9 +646,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               onDownloadFile(file);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            <Download className="w-4 h-4 text-emerald-600" />
                             <span>Tải xuống file</span>
                           </button>
                           <button
@@ -631,9 +656,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                               onOpenVersionHistory(file);
                               setActiveMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2"
+                            className="w-full px-3.5 py-2 text-xs text-slate-700 hover:bg-blue-50 flex items-center space-x-2.5 font-medium"
                           >
-                            <History className="w-3.5 h-3.5 text-indigo-600" />
+                            <History className="w-4 h-4 text-indigo-600" />
                             <span>Lịch sử phiên bản</span>
                           </button>
                           {!isReadOnly && (
@@ -642,9 +667,9 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                                 onDeleteFile(file.id);
                                 setActiveMenuId(null);
                               }}
-                              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 border-t border-slate-100"
+                              className="w-full px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2.5 font-medium border-t border-slate-100 mt-1 pt-1.5"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              <Trash2 className="w-4 h-4 text-red-600" />
                               <span>Xóa file</span>
                             </button>
                           )}
