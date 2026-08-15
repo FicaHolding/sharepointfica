@@ -29,27 +29,49 @@ function saveClientToLocalCache(client: ClientFolder) {
   }
 }
 
-// Local storage service type mapping for clients to bypass missing DB columns
-function saveClientServiceType(clientId: string, serviceType: ServiceType) {
+// Local storage service type mapping for clients to bypass missing DB columns with Multi-Key Lookup
+function saveClientServiceType(clientId: string, code: string, folderName: string, serviceType: ServiceType) {
   if (typeof window === 'undefined') return;
   try {
     const stored = localStorage.getItem('fica_client_service_types');
     const map = stored ? JSON.parse(stored) : {};
-    map[clientId] = serviceType;
+    if (clientId) map[clientId] = serviceType;
+    if (code) map[code.trim().toUpperCase()] = serviceType;
+    if (folderName) map[folderName.trim()] = serviceType;
     localStorage.setItem('fica_client_service_types', JSON.stringify(map));
   } catch {
     // Ignore
   }
 }
 
-function getClientServiceTypeMap(): Record<string, ServiceType> {
-  if (typeof window === 'undefined') return {};
+function resolveClientServiceType(client: { id: string; code?: string; folder_name?: string; service_type?: ServiceType }): ServiceType {
+  if (client.service_type && client.service_type !== ('CFO' as ServiceType)) {
+    return client.service_type;
+  }
+  if (typeof window === 'undefined') return client.service_type || 'Audit';
   try {
     const stored = localStorage.getItem('fica_client_service_types');
-    return stored ? JSON.parse(stored) : {};
+    if (stored) {
+      const map: Record<string, ServiceType> = JSON.parse(stored);
+      if (client.id && map[client.id]) return map[client.id];
+      if (client.code && map[client.code.trim().toUpperCase()]) return map[client.code.trim().toUpperCase()];
+      if (client.folder_name && map[client.folder_name.trim()]) return map[client.folder_name.trim()];
+    }
+
+    const storedClients = localStorage.getItem('fica_clients');
+    if (storedClients) {
+      const localClients: ClientFolder[] = JSON.parse(storedClients);
+      if (Array.isArray(localClients)) {
+        const found = localClients.find(
+          (lc) => lc.id === client.id || (client.code && lc.code?.toUpperCase() === client.code.toUpperCase()) || lc.folder_name === client.folder_name
+        );
+        if (found?.service_type) return found.service_type;
+      }
+    }
   } catch {
-    return {};
+    // Ignore
   }
+  return client.service_type || 'Audit';
 }
 
 // In-Memory Persistent File Blob Cache
@@ -196,10 +218,9 @@ export const sharepointService = {
       // Ignore DB fetch errors
     }
 
-    const serviceTypeMap = getClientServiceTypeMap();
     const map = new Map<string, ClientFolder>();
     for (const c of dbClients) {
-      const assignedServiceType = serviceTypeMap[c.id] || c.service_type || 'CFO';
+      const assignedServiceType = resolveClientServiceType(c);
       map.set(c.id, { ...c, service_type: assignedServiceType });
     }
 
@@ -210,8 +231,12 @@ export const sharepointService = {
           const localClients: ClientFolder[] = JSON.parse(stored);
           if (Array.isArray(localClients)) {
             for (const lc of localClients) {
+              const resolvedType = resolveClientServiceType(lc);
               if (!map.has(lc.id)) {
-                map.set(lc.id, lc);
+                map.set(lc.id, { ...lc, service_type: resolvedType });
+              } else {
+                const existing = map.get(lc.id)!;
+                map.set(lc.id, { ...existing, service_type: resolvedType });
               }
             }
           }
@@ -405,7 +430,7 @@ export const sharepointService = {
     };
 
     // Save to local cache & service type map immediately so UI shows client 100% of the time
-    saveClientServiceType(newId, serviceType);
+    saveClientServiceType(newId, cleanCode, folder_name, serviceType);
     saveClientToLocalCache(newClientObj);
 
     // 2. Try inserting into Supabase DB cleanly without schema cache error
@@ -448,6 +473,7 @@ export const sharepointService = {
   ): Promise<{ success: boolean; error?: string }> {
     const serviceType = serviceTypeInput || 'CFO';
     const folder_name = `[${newCode}] - ${newName}`;
+    saveClientServiceType(clientId, newCode, folder_name, serviceType);
 
     if (!isValidUUID(clientId)) {
       try {

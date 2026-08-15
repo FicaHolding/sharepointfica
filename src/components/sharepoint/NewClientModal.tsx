@@ -47,7 +47,7 @@ export const NewClientModal: React.FC<NewClientModalProps> = ({
     if (res.success) {
       setCode('');
       setName('');
-      setServiceType('CFO');
+      setServiceType(defaultServiceType);
       onClose();
     } else {
       setError(res.error || 'Tạo khách hàng thất bại. Vui lòng kiểm tra lại Supabase Database!');
