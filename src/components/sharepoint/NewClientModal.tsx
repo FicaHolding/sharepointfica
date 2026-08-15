@@ -8,14 +8,26 @@ interface NewClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateClient: (code: string, name: string, serviceType: ServiceType) => Promise<{ success: boolean; error?: string }>;
+  defaultServiceType?: ServiceType;
 }
 
-export const NewClientModal: React.FC<NewClientModalProps> = ({ isOpen, onClose, onCreateClient }) => {
+export const NewClientModal: React.FC<NewClientModalProps> = ({
+  isOpen,
+  onClose,
+  onCreateClient,
+  defaultServiceType = 'Audit',
+}) => {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [serviceType, setServiceType] = useState<ServiceType>('CFO');
+  const [serviceType, setServiceType] = useState<ServiceType>(defaultServiceType);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen && defaultServiceType) {
+      setServiceType(defaultServiceType);
+    }
+  }, [isOpen, defaultServiceType]);
 
   if (!isOpen) return null;
 

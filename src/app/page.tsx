@@ -1431,6 +1431,9 @@ function SharePointContent() {
         isOpen={isNewClientModalOpen}
         onClose={() => setIsNewClientModalOpen(false)}
         onCreateClient={handleCreateClient}
+        defaultServiceType={
+          filterState.serviceType !== 'all' ? (filterState.serviceType as ServiceType) : 'Audit'
+        }
       />
 
       <UploadFileModal
