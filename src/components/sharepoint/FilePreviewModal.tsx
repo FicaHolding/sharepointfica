@@ -20,6 +20,8 @@ import {
   RefreshCcw,
   Upload,
 } from 'lucide-react';
+import mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 import { DocumentFile } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
 
@@ -43,6 +45,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Document Content State for Client-Side Native Parsing (.docx, .xlsx)
+  const [docContentHtml, setDocContentHtml] = useState<string | null>(null);
+  const [renderingDoc, setRenderingDoc] = useState(false);
+  const [docRenderError, setDocRenderError] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadPreviewUrl() {
       if (!file || !isOpen) return;
@@ -50,6 +57,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setLoading(true);
       setHasStorageError(false);
       setErrorMessage(null);
+      setDocContentHtml(null);
+      setDocRenderError(null);
 
       if (!file.storage_path) {
         setFileUrl(null);
@@ -87,6 +96,51 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isSpreadsheet = Boolean(file.name.match(/\.(xlsx|xls|csv)$/i)) || (file.mime_type && (file.mime_type.includes('spreadsheet') || file.mime_type.includes('excel')));
   const isDoc = Boolean(file.name.match(/\.(docx|doc|txt)$/i));
 
+  // Render .docx / .xlsx document content directly into HTML canvas
+  useEffect(() => {
+    async function parseDocumentContent() {
+      if (!fileUrl || !file || (!isDoc && !isSpreadsheet)) {
+        setDocContentHtml(null);
+        return;
+      }
+
+      setRenderingDoc(true);
+      setDocRenderError(null);
+
+      try {
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: Không thể nạp file từ Storage`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+
+        if (isDoc) {
+          // Parse DOCX via Mammoth library
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          if (result.value && result.value.trim().length > 0) {
+            setDocContentHtml(result.value);
+          } else {
+            setDocRenderError('Nội dung tài liệu Word rỗng hoặc chưa khớp định dạng HTML.');
+          }
+        } else if (isSpreadsheet) {
+          // Parse XLSX / XLS via SheetJS library
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const htmlTable = XLSX.utils.sheet_to_html(worksheet);
+          setDocContentHtml(htmlTable);
+        }
+      } catch (err: any) {
+        console.warn('Document content parsing notice:', err.message);
+        setDocRenderError(err.message || 'Lỗi phân tích nội dung tài liệu.');
+      } finally {
+        setRenderingDoc(false);
+      }
+    }
+
+    parseDocumentContent();
+  }, [fileUrl, file, isDoc, isSpreadsheet]);
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -114,8 +168,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 select-none animate-fade-in">
-      <div className="w-full max-w-5xl h-[90vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 select-none animate-fade-in">
+      <div className="w-full max-w-6xl h-[92vh] bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 flex flex-col justify-between overflow-hidden">
         {/* Header Toolbar */}
         <div className="h-14 px-4 sm:px-5 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           {/* Left: File metadata */}
@@ -187,10 +241,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
             <button
               onClick={handleRealDownload}
-              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
+              className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors shadow-xs min-h-[44px]"
             >
               <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Tải file gốc</span>
+              <span>Tải file gốc</span>
             </button>
 
             <button
@@ -203,11 +257,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         </div>
 
         {/* Content Viewer Area */}
-        <div className="flex-1 bg-slate-950 p-3 sm:p-4 overflow-auto flex items-center justify-center relative">
-          {loading ? (
+        <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-auto flex items-center justify-center relative">
+          {loading || renderingDoc ? (
             <div className="flex flex-col items-center space-y-3 text-slate-400 text-xs">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <span>Đang xác thực Supabase Private Storage Token...</span>
+              <span>{renderingDoc ? 'Đang trích xuất nội dung văn bản...' : 'Đang xác thực Supabase Private Storage...'}</span>
             </div>
           ) : hasStorageError ? (
             /* Clean Professional Error Banner */
@@ -263,8 +317,60 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
               />
             </div>
+          ) : isDoc && docContentHtml ? (
+            /* Native Rich HTML Paper View for Word (.docx) Documents */
+            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
+              <div
+                style={{
+                  transform: `scale(${zoomLevel / 100})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.2s ease-in-out',
+                }}
+                className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border border-slate-300 font-serif leading-relaxed text-sm select-text my-auto"
+              >
+                {/* Header Banner */}
+                <div className="border-b border-slate-200 pb-3 mb-6 flex items-center justify-between font-sans text-xs text-slate-500">
+                  <span className="font-bold text-slate-700 flex items-center space-x-1.5">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <span>NỘI DUNG VĂN BẢN (DOCX NATIVE PREVIEW)</span>
+                  </span>
+                  <span>{file.name}</span>
+                </div>
+
+                {/* Rendered DOCX HTML */}
+                <div
+                  className="prose max-w-none text-slate-900 prose-headings:font-sans prose-headings:font-bold prose-h1:text-xl prose-h1:text-slate-900 prose-h2:text-lg prose-h2:text-slate-800 prose-p:my-2 prose-p:leading-relaxed [&_table]:w-full [&_table]:border-collapse [&_table]:my-4 [&_td]:border [&_td]:border-slate-300 [&_td]:p-2 [&_td]:text-xs [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-100 [&_th]:font-bold [&_th]:text-xs [&_img]:max-w-full [&_img]:mx-auto"
+                  dangerouslySetInnerHTML={{ __html: docContentHtml }}
+                />
+              </div>
+            </div>
+          ) : isSpreadsheet && docContentHtml ? (
+            /* Native Spreadsheet Table View for Excel (.xlsx) Files */
+            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
+              <div
+                style={{
+                  transform: `scale(${zoomLevel / 100})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.2s ease-in-out',
+                }}
+                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text my-auto"
+              >
+                <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between font-sans text-xs text-slate-500">
+                  <span className="font-bold text-emerald-700 flex items-center space-x-1.5">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span>NỘI DUNG BẢNG TÍNH EXCEL (XLSX PREVIEW)</span>
+                  </span>
+                  <span>{file.name}</span>
+                </div>
+
+                <div
+                  className="overflow-auto max-h-[75vh] [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:p-2 [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-100 [&_th]:font-bold [&_th]:whitespace-nowrap"
+                  dangerouslySetInnerHTML={{ __html: docContentHtml }}
+                />
+              </div>
+            </div>
           ) : (
-            /* Native Premium Document Viewer Card (Zero iframe domain restrictions) */
+            /* Fallback Document Preview Card if content parsing is not applicable */
             <div className="text-center p-8 bg-slate-900/90 rounded-2xl border border-slate-800 max-w-md text-slate-200 text-xs space-y-4 shadow-2xl my-auto animate-fade-in">
               <div className="p-4 bg-blue-500/10 rounded-2xl w-16 h-16 mx-auto flex items-center justify-center text-blue-400 border border-blue-500/20">
                 {isSpreadsheet ? <FileSpreadsheet className="w-8 h-8 text-emerald-400" /> : <FileText className="w-8 h-8 text-blue-400" />}
@@ -282,6 +388,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 <p>• Phiên bản: <strong className="text-blue-400">v{file.current_version || 1}</strong></p>
                 <p>• Thẻ tag: <strong className="text-slate-300">{file.tags?.join(', ') || 'Hợp đồng'}</strong></p>
                 <p>• Trạng thái: <strong className="text-emerald-400">{file.status || 'Approved'}</strong></p>
+                {docRenderError && <p className="text-amber-400 font-mono pt-1">• Lưu ý: {docRenderError}</p>}
               </div>
 
               <div className="flex items-center justify-center space-x-2 pt-2">
@@ -290,7 +397,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-md text-xs min-h-[44px] flex items-center space-x-2"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Tải xuống file ngay</span>
+                  <span>Tải file gốc xuống</span>
                 </button>
 
                 {fileUrl && (
