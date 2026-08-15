@@ -10,6 +10,8 @@ import {
   FileText,
   FileSpreadsheet,
   Image as ImageIcon,
+  Film,
+  Music,
   ExternalLink,
   Loader2,
   AlertTriangle,
@@ -39,9 +41,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Native Document Content Render State (.docx)
+  // Native Content Render States (.docx, .xlsx)
   const [renderingDoc, setRenderingDoc] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState<string | null>(null);
+  const [excelHtml, setExcelHtml] = useState<string | null>(null);
   const [renderSuccess, setRenderSuccess] = useState(false);
   const docContainerRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +56,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setHasStorageError(false);
       setErrorMessage(null);
       setFallbackHtml(null);
+      setExcelHtml(null);
       setRenderSuccess(false);
       setFileUrl(null);
 
@@ -87,101 +91,123 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isPdf = Boolean(file?.name.toLowerCase().endsWith('.pdf') || (file?.mime_type && file.mime_type.includes('pdf')));
   const isImage = Boolean((file?.mime_type && file.mime_type.includes('image')) || file?.name.match(/\.(jpg|jpeg|png|webp|svg|gif)$/i));
   const isDoc = Boolean(file?.name.match(/\.(docx|doc|txt)$/i));
+  const isSpreadsheet = Boolean(file?.name.match(/\.(xlsx|xls|csv)$/i) || (file?.mime_type && (file.mime_type.includes('spreadsheet') || file.mime_type.includes('excel'))));
+  const isVideo = Boolean(file?.name.match(/\.(mp4|webm|mov|m4v|mkv)$/i) || (file?.mime_type && file.mime_type.includes('video')));
+  const isAudio = Boolean(file?.name.match(/\.(mp3|wav|m4a|ogg)$/i) || (file?.mime_type && file.mime_type.includes('audio')));
 
-  // Native DOCX Renderer (docx-preview + JSZip XML Fallback)
+  // Native DOCX & XLSX Render Engine
   useEffect(() => {
-    async function renderDocxContent() {
-      if (!isOpen || !fileUrl || !isDoc) return;
+    async function renderDocumentContent() {
+      if (!isOpen || !fileUrl) return;
 
-      setRenderingDoc(true);
-      setRenderSuccess(false);
-      setFallbackHtml(null);
+      if (isDoc) {
+        setRenderingDoc(true);
+        setRenderSuccess(false);
+        setFallbackHtml(null);
 
-      try {
-        const response = await fetch(fileUrl);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: Không thể nạp file`);
-        }
-        const arrayBuffer = await response.arrayBuffer();
-
-        // 1. Try renderAsync via docx-preview into DOM Container
-        if (docContainerRef.current) {
-          docContainerRef.current.innerHTML = '';
-          try {
-            await renderAsync(arrayBuffer, docContainerRef.current, undefined, {
-              className: 'docx-rendered-page',
-              inWrapper: false,
-              ignoreWidth: true,
-              ignoreHeight: true,
-              experimental: true,
-            });
-            setRenderSuccess(true);
-            setRenderingDoc(false);
-            return;
-          } catch (renderErr) {
-            console.warn('docx-preview notice, switching to JSZip XML parser:', renderErr);
+        try {
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: Không thể nạp file`);
           }
-        }
+          const arrayBuffer = await response.arrayBuffer();
 
-        // 2. Fallback XML Parser via JSZip + DOMParser
-        const zip = await JSZip.loadAsync(arrayBuffer);
-        const docXmlFile = zip.file('word/document.xml');
-        if (docXmlFile) {
-          const xmlText = await docXmlFile.async('text');
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
-
-          let html = '';
-          const paragraphs = xmlDoc.getElementsByTagName('w:p');
-          for (let i = 0; i < paragraphs.length; i++) {
-            const p = paragraphs[i];
-            let pText = '';
-            const textNodes = p.getElementsByTagName('w:t');
-            for (let j = 0; j < textNodes.length; j++) {
-              pText += textNodes[j].textContent || '';
+          // 1. Try docx-preview into DOM Container
+          if (docContainerRef.current) {
+            docContainerRef.current.innerHTML = '';
+            try {
+              await renderAsync(arrayBuffer, docContainerRef.current, undefined, {
+                className: 'docx-rendered-page',
+                inWrapper: false,
+                ignoreWidth: true,
+                ignoreHeight: true,
+                experimental: true,
+              });
+              setRenderSuccess(true);
+              setRenderingDoc(false);
+              return;
+            } catch (renderErr) {
+              console.warn('docx-preview notice, switching to JSZip XML parser:', renderErr);
             }
-            if (pText.trim().length > 0) {
-              const isBold = p.getElementsByTagName('w:b').length > 0;
-              if (isBold && pText.length < 120) {
-                html += `<h3 class="font-bold text-base my-2.5 text-slate-900 font-sans">${pText}</h3>`;
-              } else {
-                html += `<p class="my-1.5 leading-relaxed text-slate-800">${pText}</p>`;
+          }
+
+          // 2. Fallback XML Parser via JSZip + DOMParser
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          const docXmlFile = zip.file('word/document.xml');
+          if (docXmlFile) {
+            const xmlText = await docXmlFile.async('text');
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+
+            let html = '';
+            const paragraphs = xmlDoc.getElementsByTagName('w:p');
+            for (let i = 0; i < paragraphs.length; i++) {
+              const p = paragraphs[i];
+              let pText = '';
+              const textNodes = p.getElementsByTagName('w:t');
+              for (let j = 0; j < textNodes.length; j++) {
+                pText += textNodes[j].textContent || '';
+              }
+              if (pText.trim().length > 0) {
+                const isBold = p.getElementsByTagName('w:b').length > 0;
+                if (isBold && pText.length < 120) {
+                  html += `<h3 class="font-bold text-base my-2.5 text-slate-900 font-sans">${pText}</h3>`;
+                } else {
+                  html += `<p class="my-1.5 leading-relaxed text-slate-800">${pText}</p>`;
+                }
               }
             }
-          }
 
-          // Tables
-          const tables = xmlDoc.getElementsByTagName('w:tbl');
-          for (let t = 0; t < tables.length; t++) {
-            const tbl = tables[t];
-            html += '<table class="w-full border-collapse border border-slate-300 my-4 text-xs font-sans">';
-            const rows = tbl.getElementsByTagName('w:tr');
-            for (let r = 0; r < rows.length; r++) {
-              html += '<tr>';
-              const cells = rows[r].getElementsByTagName('w:tc');
-              for (let c = 0; c < cells.length; c++) {
-                const cellText = cells[c].textContent || '';
-                html += `<td class="border border-slate-300 p-2">${cellText}</td>`;
+            // Tables
+            const tables = xmlDoc.getElementsByTagName('w:tbl');
+            for (let t = 0; t < tables.length; t++) {
+              const tbl = tables[t];
+              html += '<table class="w-full border-collapse border border-slate-300 my-4 text-xs font-sans">';
+              const rows = tbl.getElementsByTagName('w:tr');
+              for (let r = 0; r < rows.length; r++) {
+                html += '<tr>';
+                const cells = rows[r].getElementsByTagName('w:tc');
+                for (let c = 0; c < cells.length; c++) {
+                  const cellText = cells[c].textContent || '';
+                  html += `<td class="border border-slate-300 p-2">${cellText}</td>`;
+                }
+                html += '</tr>';
               }
-              html += '</tr>';
+              html += '</table>';
             }
-            html += '</table>';
-          }
 
-          if (html.length > 0) {
-            setFallbackHtml(html);
-            setRenderSuccess(true);
+            if (html.length > 0) {
+              setFallbackHtml(html);
+              setRenderSuccess(true);
+            }
           }
+        } catch (err: any) {
+          console.warn('DOCX native parse exception:', err.message);
+        } finally {
+          setRenderingDoc(false);
         }
-      } catch (err: any) {
-        console.warn('DOCX native parse exception:', err.message);
-      } finally {
-        setRenderingDoc(false);
+      } else if (isSpreadsheet) {
+        setRenderingDoc(true);
+        setExcelHtml(null);
+        try {
+          const response = await fetch(fileUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const html = XLSX.utils.sheet_to_html(worksheet);
+          setExcelHtml(html);
+        } catch (err: any) {
+          console.warn('Excel render exception:', err.message);
+        } finally {
+          setRenderingDoc(false);
+        }
       }
     }
 
-    renderDocxContent();
-  }, [isOpen, fileUrl, isDoc]);
+    renderDocumentContent();
+  }, [isOpen, fileUrl, isDoc, isSpreadsheet]);
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -223,10 +249,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 <FileText className="w-5 h-5 text-red-400" />
               ) : isDoc ? (
                 <FileText className="w-5 h-5 text-blue-400" />
-              ) : isImage ? (
-                <ImageIcon className="w-5 h-5 text-purple-400" />
-              ) : (
+              ) : isSpreadsheet ? (
                 <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+              ) : isVideo ? (
+                <Film className="w-5 h-5 text-amber-400" />
+              ) : isAudio ? (
+                <Music className="w-5 h-5 text-pink-400" />
+              ) : (
+                <ImageIcon className="w-5 h-5 text-purple-400" />
               )}
             </div>
             <div className="min-w-0">
@@ -305,7 +335,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           {loading || renderingDoc ? (
             <div className="flex flex-col items-center space-y-3 text-slate-400 text-xs">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <span>{renderingDoc ? 'Đang trích xuất nội dung văn bản Word...' : 'Đang nạp dữ liệu file...'}</span>
+              <span>{renderingDoc ? 'Đang trích xuất nội dung văn bản...' : 'Đang nạp dữ liệu file...'}</span>
             </div>
           ) : hasStorageError ? (
             /* Clean Error Banner */
@@ -357,6 +387,30 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
               />
             </div>
+          ) : isVideo && fileUrl ? (
+            /* Native Video Player (.mp4, .webm, .mov) */
+            <div className="w-full h-full flex items-center justify-center p-2">
+              <video
+                controls
+                autoPlay
+                src={fileUrl}
+                className="max-h-[78vh] max-w-full rounded-xl shadow-2xl border border-slate-800 bg-black"
+              >
+                Trình duyệt không hỗ trợ phát Video này.
+              </video>
+            </div>
+          ) : isAudio && fileUrl ? (
+            /* Native Audio Player (.mp3, .wav, .m4a) */
+            <div className="text-center p-8 bg-slate-900 rounded-2xl border border-slate-800 max-w-md w-full text-slate-200 text-xs space-y-6 shadow-2xl my-auto animate-fade-in">
+              <div className="p-5 bg-pink-500/10 rounded-2xl w-20 h-20 mx-auto flex items-center justify-center text-pink-400 border border-pink-500/20">
+                <Music className="w-10 h-10" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-bold text-base text-white">{file.name}</h4>
+                <p className="text-slate-400 text-xs font-mono">{formatFileSize(file.file_size)} • Audio</p>
+              </div>
+              <audio controls src={fileUrl} className="w-full rounded-lg" />
+            </div>
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
             <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
@@ -387,6 +441,31 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                   />
                 )}
+              </div>
+            </div>
+          ) : isSpreadsheet && excelHtml ? (
+            /* Native Excel Sheet Table View (.xlsx, .xls, .csv) */
+            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
+              <div
+                style={{
+                  transform: `scale(${zoomLevel / 100})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.2s ease-in-out',
+                }}
+                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text my-auto"
+              >
+                <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between font-sans text-xs text-slate-500">
+                  <span className="font-bold text-emerald-700 flex items-center space-x-1.5">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    <span>NỘI DUNG BẢNG TÍNH EXCEL (NATIVE XLSX PREVIEW)</span>
+                  </span>
+                  <span className="font-mono text-[11px]">{file.name}</span>
+                </div>
+
+                <div
+                  className="overflow-auto max-h-[75vh] [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:p-2 [&_td]:whitespace-nowrap [&_th]:border [&_th]:border-slate-300 [&_th]:p-2 [&_th]:bg-slate-100 [&_th]:font-bold [&_th]:whitespace-nowrap"
+                  dangerouslySetInnerHTML={{ __html: excelHtml }}
+                />
               </div>
             </div>
           ) : (
