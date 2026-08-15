@@ -34,6 +34,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [signedUrlForOffice, setSignedUrlForOffice] = useState<string | null>(null);
+  const [isVerifiedHttpUrl, setIsVerifiedHttpUrl] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setErrorMessage(null);
       setOfficeLoading(true);
       setOfficeTimeout(false);
+      setIsVerifiedHttpUrl(false);
       setFileUrl(null);
       setSignedUrlForOffice(null);
 
@@ -83,12 +85,40 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     loadPreviewUrl();
   }, [file, isOpen]);
 
+  const isOfficeDoc = Boolean(file?.name.match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/i));
+
+  // Verify that HTTP Signed URL is physically accessible on public cloud before passing to Microsoft Viewer
+  useEffect(() => {
+    async function verifyUrlAccessibility() {
+      if (!isOpen || !signedUrlForOffice || !isOfficeDoc) {
+        setIsVerifiedHttpUrl(false);
+        return;
+      }
+
+      if (signedUrlForOffice.startsWith('data:') || signedUrlForOffice.startsWith('blob:')) {
+        setIsVerifiedHttpUrl(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(signedUrlForOffice, { method: 'HEAD' });
+        if (res.ok) {
+          setIsVerifiedHttpUrl(true);
+        } else {
+          setIsVerifiedHttpUrl(false);
+        }
+      } catch {
+        // Fallback for CORS or HEAD restrictions
+        setIsVerifiedHttpUrl(true);
+      }
+    }
+
+    verifyUrlAccessibility();
+  }, [isOpen, signedUrlForOffice, isOfficeDoc]);
+
   // Timeout handler for Office Viewer iframe (15 Seconds Timeout Fallback)
   useEffect(() => {
-    if (!isOpen || !fileUrl) return;
-
-    const isOfficeFile = Boolean(file?.name.match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/i));
-    if (!isOfficeFile) return;
+    if (!isOpen || !fileUrl || !isOfficeDoc) return;
 
     setOfficeLoading(true);
     setOfficeTimeout(false);
@@ -99,13 +129,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     }, 15000);
 
     return () => clearTimeout(timer);
-  }, [isOpen, fileUrl, file]);
+  }, [isOpen, fileUrl, isOfficeDoc]);
 
   if (!isOpen || !file) return null;
 
   const isPdf = file.name.toLowerCase().endsWith('.pdf') || (file.mime_type && file.mime_type.includes('pdf'));
   const isImage = (file.mime_type && file.mime_type.includes('image')) || Boolean(file.name.match(/\.(jpg|jpeg|png|webp|svg|gif)$/i));
-  const isOfficeDoc = Boolean(file.name.match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/i));
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -133,16 +162,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     onDownload(file);
   };
 
-  // Build Encoded Office Online Viewer URL (STRICTLY REQUIRE HTTP/HTTPS PUBLIC URL)
-  const isValidHttpUrl = Boolean(
-    signedUrlForOffice &&
-      (signedUrlForOffice.startsWith('http://') || signedUrlForOffice.startsWith('https://')) &&
-      !signedUrlForOffice.startsWith('data:') &&
-      !signedUrlForOffice.startsWith('blob:')
-  );
-
-  const officeOnlineViewerUrl = isValidHttpUrl
-    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrlForOffice!)}`
+  // Build Encoded Office Online Viewer URL strictly when HTTP URL is verified
+  const officeOnlineViewerUrl = isVerifiedHttpUrl && signedUrlForOffice
+    ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrlForOffice)}`
     : null;
 
   return (
@@ -258,8 +280,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-left text-[11px] space-y-1.5 text-slate-400">
                 <p className="font-bold text-slate-300">💡 Hướng dẫn cho Quản trị viên:</p>
-                <p>• Nhấn nút <strong>"Tải lên File"</strong> tại thư mục chứa file này để cập nhật bản nén vật lý mới.</p>
-                <p>• Dữ liệu phiên bản v{file.current_version || 1} & Metadata sẽ tự động liên kết chuẩn xác.</p>
+                <p>• Vui lòng chạy lệnh SQL `supabase/schema.sql` trong Supabase SQL Editor để khởi tạo Storage bucket.</p>
+                <p>• Dữ liệu phiên bản v{file.current_version || 1} & Metadata sẽ tự động kết nối thành công.</p>
               </div>
 
               <div className="flex items-center justify-center space-x-2 pt-1">
@@ -305,7 +327,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               {officeLoading && (
                 <div className="absolute inset-0 bg-slate-950/90 z-10 flex flex-col items-center justify-center space-y-3 text-slate-300 text-xs">
                   <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                  <span>Đang nhúng trình xem Microsoft Office Online Viewer...</span>
+                  <span>Đang kết nối Microsoft Office Online Viewer...</span>
                 </div>
               )}
               <iframe
@@ -320,7 +342,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               />
             </div>
           ) : (
-            /* Fallback Document Information Card on Timeout / Error */
+            /* Fallback Document Information Card when file is stored locally or Cloud URL is unavailable */
             <div className="text-center p-8 bg-slate-900/90 rounded-2xl border border-slate-800 max-w-md text-slate-200 text-xs space-y-4 shadow-2xl my-auto animate-fade-in">
               <div className="p-4 bg-blue-500/10 rounded-2xl w-16 h-16 mx-auto flex items-center justify-center text-blue-400 border border-blue-500/20">
                 <FileText className="w-8 h-8 text-blue-400" />
@@ -338,6 +360,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 <p>• Phiên bản: <strong className="text-blue-400">v{file.current_version || 1}</strong></p>
                 <p>• Thẻ tag: <strong className="text-slate-300">{file.tags?.join(', ') || 'Tài liệu Office'}</strong></p>
                 <p>• Trạng thái: <strong className="text-emerald-400">{file.status || 'Approved'}</strong></p>
+                <p className="text-amber-400 font-mono text-[10px] pt-1">
+                  💡 Ghi chú: Cần khởi tạo SQL Bucket `documents` trong Supabase Editor để đồng bộ file lên Cloud Microsoft Viewer.
+                </p>
               </div>
 
               <div className="flex items-center justify-center space-x-2 pt-2">
