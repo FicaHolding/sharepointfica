@@ -975,6 +975,14 @@ function SharePointContent() {
         if (!f.folder_id) return true;
         if (f.folder_id === selectedSubFolder.id) return true;
         if (f.folder_id.substring(0, 8) === selectedSubFolder.id.substring(0, 8)) return true;
+
+        // Subfolder index matching (e.g. '01', '02', '03', '04')
+        const subFolderPrefix = selectedSubFolder.name.substring(0, 2);
+        if (/^\d{2}$/.test(subFolderPrefix)) {
+          if (f.folder_id.includes(subFolderPrefix) || f.folder_id.startsWith(`sf${subFolderPrefix.repeat(3)}`)) {
+            return true;
+          }
+        }
         return false;
       });
     }

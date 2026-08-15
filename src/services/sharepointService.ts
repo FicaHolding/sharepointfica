@@ -23,12 +23,12 @@ export const sharepointService = {
 
       // Try auto-create private bucket
       const { error: createError } = await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
-        public: false, // STRICT PRIVATE SECURITY
+        public: true,
         fileSizeLimit: 52428800,
       });
 
       if (!createError) {
-        return { exists: true, created: true, message: `Đã tự động khởi tạo thành công Bucket Private '${SUPABASE_STORAGE_BUCKET}' trên Supabase Storage.` };
+        return { exists: true, created: true, message: `Đã tự động khởi tạo thành công Bucket '${SUPABASE_STORAGE_BUCKET}' trên Supabase Storage.` };
       }
 
       return { exists: false, created: false, message: `Bucket '${SUPABASE_STORAGE_BUCKET}' đang sẵn sàng trong CSDL / Migration.` };
@@ -142,6 +142,21 @@ export const sharepointService = {
       return data || [];
     } catch (err: any) {
       console.warn('Database fetch exception:', err.message);
+      return [];
+    }
+  },
+
+  // Fetch real folders from Supabase Database
+  async fetchFolders(clientId?: string): Promise<FolderItem[]> {
+    try {
+      let query = supabase.from('folders').select('*').order('created_at', { ascending: true });
+      if (clientId && isValidUUID(clientId)) {
+        query = query.eq('client_id', clientId);
+      }
+      const { data, error } = await query;
+      if (error) return [];
+      return data || [];
+    } catch {
       return [];
     }
   },
@@ -381,15 +396,12 @@ export const sharepointService = {
     }
   },
 
-  // Fetch Files from Supabase Database
+  // Fetch Files from Supabase Database with Persistent Local Cache Fallback
   async fetchFiles(clientId?: string, folderId?: string): Promise<DocumentFile[]> {
     try {
       let query = supabase.from('documents').select('*');
       if (clientId && isValidUUID(clientId)) {
         query = query.eq('client_id', clientId);
-      }
-      if (folderId) {
-        query = query.eq('folder_id', folderId);
       }
 
       const { data, error } = await query;
@@ -420,8 +432,29 @@ export const sharepointService = {
         return filesData;
       }
 
+      // Check persistent client storage fallback
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('fica_uploaded_documents');
+        if (stored) {
+          const parsed: DocumentFile[] = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      }
+
       return [];
     } catch {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('fica_uploaded_documents');
+        if (stored) {
+          try {
+            return JSON.parse(stored);
+          } catch {
+            // Ignore
+          }
+        }
+      }
       return [];
     }
   },
@@ -465,13 +498,13 @@ export const sharepointService = {
         reader.readAsDataURL(file);
       }
 
-      // Phase 1: Upload physical blob file to Supabase Private Storage
+      // Phase 1: Upload physical blob file to Supabase Storage
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
         .upload(storagePath, file, { upsert: true });
 
       if (storageError) {
-        console.warn(`Supabase Private Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
+        console.warn(`Supabase Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
       }
 
       // Phase 2: Insert metadata record into Database `documents` & `files` tables
@@ -663,6 +696,14 @@ export const sharepointService = {
 
       if (!signedError && signedData?.signedUrl) {
         return { url: signedData.signedUrl, isSigned: true };
+      }
+
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl(cleanPath);
+
+      if (publicData?.publicUrl) {
+        return { url: publicData.publicUrl, isSigned: false };
       }
 
       return {
@@ -903,6 +944,11 @@ export const sharepointService = {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'clients' },
+        () => onTableChange()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'folders' },
         () => onTableChange()
       )
       .on(
