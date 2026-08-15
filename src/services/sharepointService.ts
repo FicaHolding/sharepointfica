@@ -396,8 +396,64 @@ export const sharepointService = {
     }
   },
 
-  // Fetch Files from Supabase Database with Persistent Local Cache Fallback
+  // Automatic Cross-Device Sync: Push local files to Supabase DB Cloud so Mobile devices see them
+  async syncLocalDocumentsToSupabase(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem('fica_uploaded_documents');
+      if (!stored) return;
+      const localFiles: DocumentFile[] = JSON.parse(stored);
+      if (!Array.isArray(localFiles) || localFiles.length === 0) return;
+
+      for (const file of localFiles) {
+        const payloadDoc: any = {
+          id: file.id,
+          name: file.name,
+          size: file.file_size,
+          file_size: file.file_size,
+          mime_type: file.mime_type || 'application/pdf',
+          storage_path: file.storage_path,
+          folder_id: file.folder_id,
+          client_id: isValidUUID(file.client_id) ? file.client_id : null,
+          service_type: file.service_type || 'CFO',
+          fiscal_year: file.fiscal_year || 2025,
+          status: file.status || 'Approved',
+          tags: file.tags || ['Tải lên'],
+          uploaded_by: file.created_by_name || 'Fica Admin',
+          created_at: file.created_at || new Date().toISOString(),
+          updated_at: file.updated_at || new Date().toISOString(),
+        };
+
+        await supabase.from('documents').upsert([payloadDoc]);
+        await supabase.from('files').upsert([
+          {
+            id: file.id,
+            client_id: isValidUUID(file.client_id) ? file.client_id : null,
+            folder_id: file.folder_id,
+            name: file.name,
+            current_version: file.current_version || 1,
+            file_size: file.file_size,
+            mime_type: file.mime_type || 'application/pdf',
+            storage_path: file.storage_path,
+            status: file.status || 'Approved',
+            fiscal_year: file.fiscal_year || 2025,
+            service_type: file.service_type || 'CFO',
+            tags: file.tags || ['Tải lên'],
+            created_at: file.created_at || new Date().toISOString(),
+            updated_at: file.updated_at || new Date().toISOString(),
+          },
+        ]);
+      }
+    } catch {
+      // Ignore background sync errors
+    }
+  },
+
+  // Fetch Files from Supabase Database with Persistent Local Cache Fallback & Automatic Mobile Sync
   async fetchFiles(clientId?: string, folderId?: string): Promise<DocumentFile[]> {
+    // Background sync local cache to Supabase DB
+    this.syncLocalDocumentsToSupabase().catch(() => {});
+
     try {
       let query = supabase.from('documents').select('*');
       if (clientId && isValidUUID(clientId)) {
@@ -405,8 +461,10 @@ export const sharepointService = {
       }
 
       const { data, error } = await query;
+      let cloudDocs: DocumentFile[] = [];
+
       if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
+        cloudDocs = data.map((d: any) => ({
           id: d.id,
           client_id: d.client_id || clientId || '',
           folder_id: d.folder_id || folderId || '',
@@ -428,22 +486,35 @@ export const sharepointService = {
       }
 
       const { data: filesData } = await supabase.from('files').select('*');
-      if (filesData && filesData.length > 0) {
-        return filesData;
+      let filesTableDocs: DocumentFile[] = filesData || [];
+
+      // Combine cloudDocs and filesTableDocs cleanly without duplicates
+      const map = new Map<string, DocumentFile>();
+      for (const d of cloudDocs) map.set(d.id, d);
+      for (const f of filesTableDocs) {
+        if (!map.has(f.id)) map.set(f.id, f);
       }
 
       // Check persistent client storage fallback
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('fica_uploaded_documents');
         if (stored) {
-          const parsed: DocumentFile[] = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+          try {
+            const parsed: DocumentFile[] = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              for (const localDoc of parsed) {
+                if (!map.has(localDoc.id)) {
+                  map.set(localDoc.id, localDoc);
+                }
+              }
+            }
+          } catch {
+            // Ignore
           }
         }
       }
 
-      return [];
+      return Array.from(map.values());
     } catch {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('fica_uploaded_documents');
