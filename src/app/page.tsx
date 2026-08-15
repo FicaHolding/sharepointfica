@@ -1076,7 +1076,7 @@ function SharePointContent() {
         />
 
         {/* Right Main Content */}
-        <main className="flex-1 bg-slate-100 overflow-y-auto flex flex-col justify-between relative pb-16 md:pb-0">
+        <main className="flex-1 bg-white overflow-y-auto flex flex-col justify-between relative pb-16 md:pb-0">
           <div>
             {/* Breadcrumb Navigation - Synced with URL */}
             <Breadcrumb
