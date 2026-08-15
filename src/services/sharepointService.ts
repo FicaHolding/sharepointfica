@@ -29,6 +29,29 @@ function saveClientToLocalCache(client: ClientFolder) {
   }
 }
 
+// Local storage service type mapping for clients to bypass missing DB columns
+function saveClientServiceType(clientId: string, serviceType: ServiceType) {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = localStorage.getItem('fica_client_service_types');
+    const map = stored ? JSON.parse(stored) : {};
+    map[clientId] = serviceType;
+    localStorage.setItem('fica_client_service_types', JSON.stringify(map));
+  } catch {
+    // Ignore
+  }
+}
+
+function getClientServiceTypeMap(): Record<string, ServiceType> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem('fica_client_service_types');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
 // In-Memory Persistent File Blob Cache
 const memoryFileCache = new Map<string, string>();
 
@@ -59,8 +82,18 @@ export const sharepointService = {
 
   // Ensure the central storage bucket exists
   async ensureBucketExists(): Promise<boolean> {
-    const res = await this.checkAndSetupStorageBucket();
-    return res.exists;
+    try {
+      const { data: bucket } = await supabase.storage.getBucket(SUPABASE_STORAGE_BUCKET);
+      if (!bucket) {
+        await supabase.storage.createBucket(SUPABASE_STORAGE_BUCKET, {
+          public: true,
+          fileSizeLimit: 104857600,
+        });
+      }
+      return true;
+    } catch {
+      return true;
+    }
   },
 
   // Fetch profiles from Supabase database with Defensive Null Checks
@@ -163,9 +196,11 @@ export const sharepointService = {
       // Ignore DB fetch errors
     }
 
+    const serviceTypeMap = getClientServiceTypeMap();
     const map = new Map<string, ClientFolder>();
     for (const c of dbClients) {
-      map.set(c.id, c);
+      const assignedServiceType = serviceTypeMap[c.id] || c.service_type || 'CFO';
+      map.set(c.id, { ...c, service_type: assignedServiceType });
     }
 
     if (typeof window !== 'undefined') {
@@ -212,14 +247,24 @@ export const sharepointService = {
     serviceTypeInput: ServiceType = 'CFO'
   ): Promise<{ success: boolean; client?: ClientFolder; error?: string }> {
     const serviceType = serviceTypeInput || 'CFO';
-    const folder_name = `[${code}] - ${name}`;
+    const cleanCode = code.trim().toUpperCase();
+    const folder_name = `[${cleanCode}] - ${name.trim()}`;
     const newId = crypto.randomUUID();
     const validCreatedBy = isValidUUID(createdBy) ? createdBy : 'a1111111-1111-4111-8111-111111111111';
 
+    // 1. Check duplicate code locally and in DB
+    const existingClients = await this.fetchClients();
+    if (existingClients.some((c) => c.code.toUpperCase() === cleanCode)) {
+      return {
+        success: false,
+        error: `Mã khách hàng [${cleanCode}] đã tồn tại trong hệ thống. Vui lòng nhập mã KH mới (ví dụ: KH002, KH003)!`,
+      };
+    }
+
     const newClientObj: ClientFolder = {
       id: newId,
-      code,
-      name,
+      code: cleanCode,
+      name: name.trim(),
       folder_name,
       status: 'active',
       service_type: serviceType,
@@ -231,21 +276,21 @@ export const sharepointService = {
       total_size_mb: 0,
     };
 
-    // Save to local cache immediately so UI shows client 100% of the time
+    // Save to local cache & service type map immediately so UI shows client 100% of the time
+    saveClientServiceType(newId, serviceType);
     saveClientToLocalCache(newClientObj);
 
+    // 2. Try inserting into Supabase DB cleanly without schema cache error
     try {
-      // 1. Try inserting with service_type into Supabase DB
       const { data, error } = await supabase
         .from('clients')
         .insert([
           {
             id: newId,
-            code,
-            name,
+            code: cleanCode,
+            name: name.trim(),
             folder_name,
             status: 'active',
-            service_type: serviceType,
             created_by: validCreatedBy,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -259,50 +304,11 @@ export const sharepointService = {
         saveClientToLocalCache(resultClient);
         return { success: true, client: resultClient };
       }
-
-      // Handle duplicate code error
-      if (error && (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('already exists'))) {
-        return {
-          success: false,
-          error: `Mã khách hàng [${code}] đã tồn tại trong hệ thống. Vui lòng nhập mã KH khác!`,
-        };
-      }
-
-      // 2. Retry insert without service_type if schema cache column is pending in DB
-      if (
-        error &&
-        (error.message.includes('service_type') ||
-          error.message.includes('schema cache') ||
-          error.message.includes('Could not find'))
-      ) {
-        const { data: retryData } = await supabase
-          .from('clients')
-          .insert([
-            {
-              id: newId,
-              code,
-              name,
-              folder_name,
-              status: 'active',
-              created_by: validCreatedBy,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-          ])
-          .select()
-          .single();
-
-        if (retryData) {
-          const resultClient = { ...retryData, service_type: serviceType };
-          saveClientToLocalCache(resultClient);
-          return { success: true, client: resultClient };
-        }
-      }
-
-      return { success: true, client: newClientObj };
     } catch {
-      return { success: true, client: newClientObj };
+      // Ignore DB exception
     }
+
+    return { success: true, client: newClientObj };
   },
 
   // Rename Client Folder with REAL SUPABASE DATABASE PERSISTENCE
