@@ -34,17 +34,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Top Navigation Links */}
       <div className="p-3 space-y-6 overflow-y-auto">
         <div>
-          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span>Điều hướng chính</span>
-            {onCloseMobile && (
+          {onCloseMobile && (
+            <div className="md:hidden flex justify-end px-3 py-1">
               <button
                 onClick={onCloseMobile}
-                className="md:hidden p-1 text-slate-400 hover:text-white rounded-md min-w-[36px] min-h-[36px] flex items-center justify-center"
+                className="p-1 text-slate-400 hover:text-white rounded-md min-w-[36px] min-h-[36px] flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <nav className="mt-1 space-y-1">
             <button
               onClick={() => {
