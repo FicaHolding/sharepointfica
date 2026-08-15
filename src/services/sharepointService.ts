@@ -912,7 +912,7 @@ export const sharepointService = {
     }
   },
 
-  // Upload Company Logo with Permanent Base64 Data URL Persistence (Guaranteed across F5 reloads)
+  // Save/Upload Permanent Company Logo with Cross-Device Mobile Cloud Sync
   async uploadCompanyLogo(file: File): Promise<{ success: boolean; logoUrl?: string; error?: string }> {
     try {
       if (file.size > 2 * 1024 * 1024) {
@@ -925,7 +925,6 @@ export const sharepointService = {
 
       await this.ensureBucketExists();
 
-      // Read file as Permanent Base64 Data URL for instant & F5 persistence
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -938,7 +937,7 @@ export const sharepointService = {
         localStorage.setItem('fica_company_logo_path', 'system_settings/company_logo.png');
       }
 
-      // Upload to Supabase Storage in background
+      // Upload to Supabase Storage for Mobile cross-device sync
       const storagePath = `system_settings/company_logo.png`;
       const { error: storageError } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
@@ -962,22 +961,40 @@ export const sharepointService = {
     }
   },
 
-  // Get Permanent Company Logo URL across F5 reloads
+  // Get Permanent Company Logo URL across PC & Mobile Devices
   async getCompanyLogoUrl(): Promise<string | null> {
+    // 1. Try Supabase Storage Cloud first for Mobile devices
+    try {
+      const { data: signedData } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .createSignedUrl('system_settings/company_logo.png', 3600);
+
+      if (signedData?.signedUrl) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('fica_company_logo', signedData.signedUrl);
+        }
+        return signedData.signedUrl;
+      }
+    } catch {
+      // Fallback
+    }
+
+    try {
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl('system_settings/company_logo.png');
+
+      if (publicData?.publicUrl) {
+        return publicData.publicUrl;
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Fallback to local storage if available
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('fica_company_logo');
       if (stored) return stored;
-    }
-    try {
-      const res = await this.getFilePreviewOrDownloadUrl('system_settings/company_logo.png');
-      if (res.url) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('fica_company_logo', res.url);
-        }
-        return res.url;
-      }
-    } catch {
-      // Ignore
     }
     return null;
   },
