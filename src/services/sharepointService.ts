@@ -1378,6 +1378,37 @@ export const sharepointService = {
 
       const cleanPath = storagePath.replace(/^\/+/, '');
 
+      // Check memory cache for instant local display
+      if (memoryFileCache.has(cleanPath)) {
+        return {
+          url: memoryFileCache.get(cleanPath)!,
+          httpSignedUrl: memoryFileCache.get(cleanPath)!,
+          isSigned: false,
+        };
+      }
+      if (memoryFileCache.has(storagePath)) {
+        return {
+          url: memoryFileCache.get(storagePath)!,
+          httpSignedUrl: memoryFileCache.get(storagePath)!,
+          isSigned: false,
+        };
+      }
+
+      // Check LocalStorage cache for instant local display
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(`fica_doc_data_${cleanPath}`) || localStorage.getItem(`fica_doc_data_${storagePath}`);
+        if (cached) {
+          return {
+            url: cached,
+            httpSignedUrl: cached,
+            isSigned: false,
+          };
+        }
+      }
+
+      // Ensure bucket exists on Supabase Cloud
+      await this.ensureBucketExists();
+
       // Always try to generate a real HTTP Signed URL from Supabase Storage for external viewers
       let httpSignedUrl: string | null = null;
       try {
@@ -1397,34 +1428,6 @@ export const sharepointService = {
         }
       } catch {
         // Ignore storage signed url errors
-      }
-
-      // Check memory cache for instant local display
-      if (memoryFileCache.has(cleanPath)) {
-        return {
-          url: memoryFileCache.get(cleanPath)!,
-          httpSignedUrl: httpSignedUrl,
-          isSigned: false,
-        };
-      }
-      if (memoryFileCache.has(storagePath)) {
-        return {
-          url: memoryFileCache.get(storagePath)!,
-          httpSignedUrl: httpSignedUrl,
-          isSigned: false,
-        };
-      }
-
-      // Check LocalStorage cache for instant local display
-      if (typeof window !== 'undefined') {
-        const cached = localStorage.getItem(`fica_doc_data_${cleanPath}`) || localStorage.getItem(`fica_doc_data_${storagePath}`);
-        if (cached) {
-          return {
-            url: cached,
-            httpSignedUrl: httpSignedUrl,
-            isSigned: false,
-          };
-        }
       }
 
       if (httpSignedUrl) {

@@ -71,9 +71,35 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
         // Retrieve Signed URL / Local Blob / Data URL
         const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
+        const targetUrl = res.url || res.httpSignedUrl;
 
-        if (res.url || res.httpSignedUrl) {
-          setFileUrl(res.url || res.httpSignedUrl);
+        if (targetUrl) {
+          // Verify URL content isn't a Supabase 404 JSON string before assigning to iframe
+          if (targetUrl.startsWith('http')) {
+            try {
+              const testRes = await fetch(targetUrl, { method: 'GET' });
+              if (testRes.status === 404) {
+                setHasStorageError(true);
+                setErrorMessage('Bucket Storage chưa được khởi tạo trên Supabase Cloud hoặc file vật lý chưa được tải lên.');
+                setLoading(false);
+                return;
+              }
+              const contentType = testRes.headers.get('content-type') || '';
+              if (contentType.includes('application/json')) {
+                const text = await testRes.clone().text();
+                if (text.includes('NoSuchBucket') || text.includes('Bucket not found')) {
+                  setHasStorageError(true);
+                  setErrorMessage('Bucket Storage chưa được mở Public trên Supabase Cloud.');
+                  setLoading(false);
+                  return;
+                }
+              }
+            } catch {
+              // Ignore fetch verification error on CORS
+            }
+          }
+
+          setFileUrl(targetUrl);
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa có trên Storage.');
