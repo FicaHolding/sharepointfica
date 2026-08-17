@@ -431,6 +431,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div
       onClick={(e) => {
