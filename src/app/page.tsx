@@ -25,6 +25,7 @@ import { DeleteClientModal } from '@/components/sharepoint/DeleteClientModal';
 import { NewSubfolderModal } from '@/components/sharepoint/NewSubfolderModal';
 import { RenameSubfolderModal } from '@/components/sharepoint/RenameSubfolderModal';
 import { DeleteSubfolderModal } from '@/components/sharepoint/DeleteSubfolderModal';
+import { DeleteFileModal } from '@/components/sharepoint/DeleteFileModal';
 import { ContextMenu, ContextMenuPosition } from '@/components/sharepoint/ContextMenu';
 import { ToastContainer, ToastMessage } from '@/components/sharepoint/ToastContainer';
 import {
@@ -40,6 +41,12 @@ import {
 import { Lock, Activity, Info, UploadCloud, Users, Settings, Filter, CheckCircle2 } from 'lucide-react';
 import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
+import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
+
+const isValidUUID = (id?: string | null): boolean => {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+};
 
 function SharePointContent() {
   const router = useRouter();
@@ -420,6 +427,7 @@ function SharePointContent() {
   const [customSubFolders, setCustomSubFolders] = useState<FolderItem[]>([]);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
+  const [selectedFileForDelete, setSelectedFileForDelete] = useState<DocumentFile | null>(null);
   const [detailsItem, setDetailsItem] = useState<{
     client?: ClientFolder;
     subFolder?: FolderItem;
@@ -898,11 +906,45 @@ function SharePointContent() {
     addToast('success', 'Đã lưu vĩnh viễn vào Supabase Storage & CSDL!', `File: ${data.name}`);
   };
 
-  // Delete single file
+  // Delete single file trigger (Opens confirmation modal)
   const handleDeleteFile = (fileId: string) => {
     const targetFile = files.find((f) => f.id === fileId);
-    setFiles((prev) => {
-      const updated = prev.filter((f) => f.id !== fileId);
+    if (targetFile) {
+      setSelectedFileForDelete(targetFile);
+    }
+  };
+
+  // Confirmed Delete File execution (Archive vs Permanent)
+  const handleConfirmDeleteFile = async (fileId: string, mode: 'archive' | 'permanent') => {
+    const targetFile = files.find((f) => f.id === fileId);
+    if (!targetFile) return false;
+
+    if (mode === 'archive') {
+      // Soft Delete: Move to Archive Read-Only
+      setFiles((prev) =>
+        prev.map((f) => (f.id === fileId ? { ...f, status: 'Archived', updated_at: new Date().toISOString() } : f))
+      );
+      if (typeof window !== 'undefined') {
+        try {
+          const storedDocs = localStorage.getItem('fica_uploaded_documents');
+          if (storedDocs) {
+            const existing: DocumentFile[] = JSON.parse(storedDocs);
+            const updated = existing.map((f) =>
+              f.id === fileId ? { ...f, status: 'Archived', updated_at: new Date().toISOString() } : f
+            );
+            localStorage.setItem('fica_uploaded_documents', JSON.stringify(updated));
+          }
+        } catch {
+          // Ignore
+        }
+      }
+      pushAuditLog('UPDATE_METADATA', `Chuyển file ${targetFile.name} vào Kho Lưu Trữ (Archive)`, targetFile.name);
+      addToast('info', 'Đã lưu file vào Kho Lưu Trữ (Archive)', targetFile.name);
+      router.refresh();
+      return true;
+    } else {
+      // Permanent Hard Delete from Storage & DB
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
       if (typeof window !== 'undefined') {
         try {
           const storedDocs = localStorage.getItem('fica_uploaded_documents');
@@ -917,12 +959,22 @@ function SharePointContent() {
           // Ignore
         }
       }
-      return updated;
-    });
-
-    if (targetFile) {
+      try {
+        if (targetFile.storage_path) {
+          const cleanPath = targetFile.storage_path.replace(/^\/+/, '');
+          await supabase.storage.from(SUPABASE_STORAGE_BUCKET).remove([cleanPath]);
+        }
+        if (isValidUUID(fileId)) {
+          await supabase.from('documents').delete().eq('id', fileId);
+          await supabase.from('files').delete().eq('id', fileId);
+        }
+      } catch {
+        // Ignore DB error
+      }
       pushAuditLog('DELETE_FILE', `Đã xóa vĩnh viễn file ${targetFile.name}`, targetFile.name);
-      addToast('info', 'Đã xóa tài liệu', targetFile.name);
+      addToast('error', 'Đã xóa vĩnh viễn khỏi hệ thống', targetFile.name);
+      router.refresh();
+      return true;
     }
   };
 
@@ -1559,6 +1611,13 @@ function SharePointContent() {
         isOpen={!!selectedSubfolderForDelete}
         onClose={() => setSelectedSubfolderForDelete(null)}
         onConfirmDelete={handleConfirmDeleteSubfolder}
+      />
+
+      <DeleteFileModal
+        file={selectedFileForDelete}
+        isOpen={!!selectedFileForDelete}
+        onClose={() => setSelectedFileForDelete(null)}
+        onConfirmDelete={handleConfirmDeleteFile}
       />
 
       <UploadFileModal
