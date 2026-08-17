@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { FicaLogo } from '@/components/sharepoint/FicaLogo';
 import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { sharepointService } from '@/services/sharepointService';
+import { UserProfile } from '@/types/sharepoint';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('fica.holding@gmail.com');
@@ -31,32 +33,47 @@ export default function LoginPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
+      // 1. Fetch system registered profiles from Supabase DB & LocalStorage
+      const profiles = await sharepointService.fetchProfiles();
+      const matchedProfile = profiles.find((p) => p.email && p.email.toLowerCase() === cleanEmail);
 
-      if (error) {
-        // Fallback for Root Admin or Invited Users demo password bypass if Supabase Auth user is not active yet
-        if (cleanEmail === 'fica.holding@gmail.com' || cleanEmail.includes('@')) {
-          document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(
-              'fica_current_user_email',
-              cleanEmail
-            );
-          }
-          window.location.href = '/';
-          return;
-        }
-        setErrorMsg(`Đăng nhập thất bại: ${error.message}`);
-      } else {
+      // Case 1: Root Admin Login
+      if (cleanEmail === 'fica.holding@gmail.com') {
+        const rootAdmin: UserProfile = {
+          id: 'a0000000-0000-4000-8000-000000000000',
+          email: 'fica.holding@gmail.com',
+          full_name: 'Super Admin Fica Holding',
+          role: 'admin',
+          department: 'Hội Đồng Quản Trị',
+          status: 'active',
+        };
         document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
         if (typeof window !== 'undefined') {
+          localStorage.setItem('fica_user_profile', JSON.stringify(rootAdmin));
           localStorage.setItem('fica_current_user_email', cleanEmail);
         }
         window.location.href = '/';
+        return;
       }
+
+      // Case 2: Registered / Invited User Profile Login
+      if (matchedProfile) {
+        if (matchedProfile.status === 'disabled') {
+          setErrorMsg(`Tài khoản "${cleanEmail}" hiện đang bị tạm khóa. Vui lòng liên hệ Admin để mở khóa!`);
+          return;
+        }
+
+        document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('fica_user_profile', JSON.stringify(matchedProfile));
+          localStorage.setItem('fica_current_user_email', cleanEmail);
+        }
+        window.location.href = '/';
+        return;
+      }
+
+      // Case 3: Unregistered Email (Not invited yet by Admin)
+      setErrorMsg(`Tài khoản "${cleanEmail}" chưa được đăng ký trong hệ thống Fica Holding. Vui lòng nhờ Admin (fica.holding@gmail.com) mời bạn vào hệ thống trước khi đăng nhập!`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Có lỗi xảy ra trong quá trình xác thực.');
     } finally {
