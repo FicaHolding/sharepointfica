@@ -223,6 +223,7 @@ export const sharepointService = {
     map.set('fica.holding@gmail.com', rootAdminProfile);
 
     for (const p of dbProfiles) {
+      if (!p || !p.email) continue;
       // Filter out demo test emails
       if (['admin@example.com', 'admin@fica.vn', 'manager@fica.vn', 'staff@fica.vn', 'client@fica.vn'].includes(p.email.toLowerCase())) {
         continue;
@@ -242,6 +243,7 @@ export const sharepointService = {
           const localProfiles: UserProfile[] = JSON.parse(stored);
           if (Array.isArray(localProfiles)) {
             for (const lp of localProfiles) {
+              if (!lp || !lp.email) continue;
               const emailKey = lp.email.toLowerCase();
               if (['admin@example.com', 'admin@fica.vn', 'manager@fica.vn', 'staff@fica.vn', 'client@fica.vn'].includes(emailKey)) {
                 continue;
@@ -263,7 +265,9 @@ export const sharepointService = {
     // Deduplicate unique profiles by ID
     const uniqueMap = new Map<string, UserProfile>();
     for (const p of map.values()) {
-      uniqueMap.set(p.id, p);
+      if (p && p.id) {
+        uniqueMap.set(p.id, p);
+      }
     }
 
     return Array.from(uniqueMap.values());
@@ -271,8 +275,12 @@ export const sharepointService = {
 
   // Smart Member Invite & Profile Creation in Supabase Database & Persistent Local Storage Engine
   async createProfile(profile: Omit<UserProfile, 'id'>): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
-    const cleanEmail = profile.email.trim().toLowerCase();
-    const cleanName = (profile as any).fullName ? (profile as any).fullName.trim() : profile.full_name?.trim() || '';
+    const cleanEmail = (profile.email || '').trim().toLowerCase();
+    const cleanName = (profile as any).fullName
+      ? (profile as any).fullName.trim()
+      : profile.full_name
+      ? profile.full_name.trim()
+      : cleanEmail.split('@')[0] || 'Thành viên mới';
 
     // Protection Check
     if (cleanEmail === 'fica.holding@gmail.com') {
@@ -280,11 +288,11 @@ export const sharepointService = {
     }
 
     const existingUsers = await this.fetchProfiles();
-    const duplicate = existingUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    const duplicate = existingUsers.find((u) => u.email && u.email.toLowerCase() === cleanEmail);
     if (duplicate) {
       return {
         success: false,
-        error: `Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${duplicate.role.toUpperCase()}]!`,
+        error: `Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${(duplicate.role || 'staff').toUpperCase()}]!`,
       };
     }
 
@@ -293,7 +301,7 @@ export const sharepointService = {
       id: newId,
       email: cleanEmail,
       full_name: cleanName,
-      role: profile.role,
+      role: profile.role || 'staff',
       department: profile.department?.trim() || 'Fica Holding',
       phone: profile.phone?.trim() || undefined,
       status: 'pending', // Smart Invite Pending Activation
@@ -306,7 +314,7 @@ export const sharepointService = {
         const stored = localStorage.getItem('fica_system_users');
         let existing: UserProfile[] = stored ? JSON.parse(stored) : [];
         if (!Array.isArray(existing)) existing = [];
-        existing = existing.filter((u) => u.email.toLowerCase() !== newProfileObj.email.toLowerCase());
+        existing = existing.filter((u) => u && u.email && u.email.toLowerCase() !== newProfileObj.email.toLowerCase());
         existing.unshift(newProfileObj);
         localStorage.setItem('fica_system_users', JSON.stringify(existing));
       } catch {
@@ -322,7 +330,7 @@ export const sharepointService = {
     }
 
     try {
-      await supabase
+      const { error: insertError } = await supabase
         .from('profiles')
         .insert([
           {
@@ -338,8 +346,25 @@ export const sharepointService = {
             updated_at: new Date().toISOString(),
           },
         ]);
+
+      if (insertError) {
+        // Defensive Fallback Retry without extra columns
+        await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: newId,
+              email: newProfileObj.email,
+              full_name: newProfileObj.full_name,
+              role: newProfileObj.role,
+              department: newProfileObj.department,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ]);
+      }
     } catch (err: any) {
-      console.warn('Supabase Profiles INSERT notice:', err.message);
+      console.warn('Supabase Profiles INSERT notice:', err?.message);
     }
 
     await this.logAudit({

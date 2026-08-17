@@ -594,26 +594,29 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-800">
                   {safeUsers.map((u) => {
-                    const isRootAdmin = u.email.toLowerCase() === 'fica.holding@gmail.com';
+                    if (!u || !u.id) return null;
+                    const userEmail = (u.email || '').toLowerCase();
+                    const userFullName = u.full_name || u.email || 'Thành viên Fica';
+                    const isRootAdmin = userEmail === 'fica.holding@gmail.com';
                     return (
                       <tr key={u.id} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3">
                           <div className="flex items-center space-x-2.5">
                             <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center font-mono text-xs shadow-xs">
-                              {getInitials(u.full_name)}
+                              {getInitials(userFullName)}
                             </div>
                             <div>
                               <div className="font-bold text-slate-900 flex items-center space-x-1">
-                                <span>{u.full_name}</span>
+                                <span>{userFullName}</span>
                                 {isRootAdmin && <span title="Root Admin Gốc"><ShieldCheck className="w-3.5 h-3.5 text-purple-600" /></span>}
                               </div>
-                              <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
+                              <div className="text-[11px] text-slate-500 font-mono">{userEmail || 'no-email'}</div>
                             </div>
                           </div>
                         </td>
                         <td className="p-3 font-medium text-slate-600">{u.department || 'Fica Holding'}</td>
-                        <td className="p-3">{getRoleBadge(u.role)}</td>
-                        <td className="p-3">{getStatusBadge(u.status)}</td>
+                        <td className="p-3">{getRoleBadge(u.role || 'staff')}</td>
+                        <td className="p-3">{getStatusBadge(u.status || 'active')}</td>
                         <td className="p-3 text-right">
                           {isRootAdmin ? (
                             <div className="flex items-center justify-end space-x-1 text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-200">
