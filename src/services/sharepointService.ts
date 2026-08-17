@@ -678,12 +678,18 @@ export const sharepointService = {
               const resolvedType = resolveClientServiceType(lc);
               if (!map.has(lc.id)) {
                 map.set(lc.id, { ...lc, service_type: resolvedType });
-              } else {
-                const existing = map.get(lc.id)!;
-                map.set(lc.id, { ...existing, service_type: resolvedType });
               }
             }
           }
+        } catch {
+          // Ignore
+        }
+      }
+
+      // Update local storage on all devices (Mobile & PC) with fresh DB state
+      if (dbClients.length > 0) {
+        try {
+          localStorage.setItem('fica_clients', JSON.stringify(Array.from(map.values())));
         } catch {
           // Ignore
         }
@@ -1197,9 +1203,22 @@ export const sharepointService = {
             // Ignore
           }
         }
+
+        // Sync fresh cloud docs list to LocalStorage on Mobile & PC
+        if (map.size > 0) {
+          try {
+            localStorage.setItem('fica_uploaded_documents', JSON.stringify(Array.from(map.values())));
+          } catch {
+            // Ignore
+          }
+        }
       }
 
-      return Array.from(map.values());
+      let allFilesList = Array.from(map.values());
+      if (clientId) {
+        allFilesList = allFilesList.filter((f) => f.client_id === clientId || (folderId && f.folder_id === folderId));
+      }
+      return allFilesList;
     } catch {
       if (typeof window !== 'undefined') {
         const stored = localStorage.getItem('fica_uploaded_documents');
