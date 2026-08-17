@@ -21,6 +21,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [fullName, setFullName] = useState('');
   const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -32,6 +34,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       setFullName(currentUser.full_name || '');
       setDepartment(currentUser.department || 'Phòng Tư Vấn Tài Chính');
       setPhone(currentUser.phone ?? '');
+      setNewPassword('');
+      setConfirmPassword('');
       setSuccessMsg('');
       setErrorMsg('');
 
@@ -76,6 +80,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       return;
     }
 
+    if (newPassword || confirmPassword) {
+      if (newPassword.length < 6) {
+        setErrorMsg('Mật khẩu mới phải có ít nhất 6 ký tự!');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setErrorMsg('Xác nhận mật khẩu không khớp! Vui lòng kiểm tra lại.');
+        return;
+      }
+    }
+
     setLoading(true);
     setSuccessMsg('');
     setErrorMsg('');
@@ -102,14 +117,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         localStorage.setItem('fica_user_profile', JSON.stringify(stored));
       }
 
-      // 2. Update Supabase Auth User Metadata
-      const { error: authErr } = await supabase.auth.updateUser({
+      // 2. Update Supabase Auth User Metadata / Password
+      const updatePayload: any = {
         data: {
           full_name: fullNameValue,
           department: deptValue,
           phone: phoneValue,
         },
-      });
+      };
+      if (newPassword) {
+        updatePayload.password = newPassword;
+      }
+
+      const { error: authErr } = await supabase.auth.updateUser(updatePayload);
 
       if (authErr) {
         console.warn('Supabase Auth update notice:', authErr.message);
@@ -276,6 +296,37 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="VD: 0908123456"
                   className="w-full p-2.5 pl-9 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 font-mono disabled:bg-slate-100"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Change Password Section */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <h5 className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+              <Shield className="w-3.5 h-3.5 text-blue-600" />
+              <span>Đổi Mật Khẩu Đăng Nhập</span>
+            </h5>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Mật khẩu mới:</label>
+                <input
+                  type="password"
+                  placeholder="Mật khẩu mới (Tối thiểu 6 ký tự)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Xác nhận mật khẩu:</label>
+                <input
+                  type="password"
+                  placeholder="Nhập lại mật khẩu mới"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded focus:outline-none focus:border-blue-600 font-mono text-xs"
                 />
               </div>
             </div>

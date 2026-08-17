@@ -1046,9 +1046,15 @@ function SharePointContent() {
   const displayedClients = useMemo(() => {
     let list = activeTab === 'archived_clients' ? archivedClientsList : activeClientsList;
 
-    // RBAC Scoping for Manager and Staff: filter by assigned client IDs
-    if (currentUser.role !== 'admin' && assignedClientIds.length > 0) {
-      list = list.filter((c) => assignedClientIds.includes(c.id));
+    // Smart RBAC Scoping:
+    // ADMIN & MANAGER: Full access to ALL clients (View, Edit, Add, Delete)
+    // STAFF & CLIENT: Strict Scoping - ONLY view/edit assigned clients in assignedClientIds!
+    if (currentUser.role === 'staff' || currentUser.role === 'client') {
+      if (assignedClientIds.length > 0) {
+        list = list.filter((c) => assignedClientIds.includes(c.id));
+      } else {
+        list = [];
+      }
     }
 
     if (filterState.serviceType && filterState.serviceType !== 'all') {

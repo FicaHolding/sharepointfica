@@ -9,8 +9,11 @@ import { sharepointService } from '@/services/sharepointService';
 import { UserProfile } from '@/types/sharepoint';
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('fica.holding@gmail.com');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [department, setDepartment] = useState('Phòng Tư Vấn Tài Chính');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -18,8 +21,69 @@ export default function LoginPage() {
 
   const supabase = createClient();
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = fullName.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMsg('Vui lòng nhập Email công ty hợp lệ.');
+      setLoading(false);
+      return;
+    }
+
+    if (!cleanName) {
+      setErrorMsg('Vui lòng nhập Họ và Tên của bạn.');
+      setLoading(false);
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      setErrorMsg('Mật khẩu đăng ký phải có ít nhất 6 ký tự!');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const existing = await sharepointService.fetchProfiles();
+      const duplicate = existing.find((p) => p.email && p.email.toLowerCase() === cleanEmail);
+      if (duplicate || cleanEmail === 'fica.holding@gmail.com') {
+        setErrorMsg(`Tài khoản Email "${cleanEmail}" đã tồn tại trong hệ thống! Vui lòng chuyển sang Đăng nhập.`);
+        setLoading(false);
+        return;
+      }
+
+      const res = await sharepointService.createProfile({
+        email: cleanEmail,
+        full_name: cleanName,
+        department: department.trim() || 'Fica Holding',
+        role: 'staff',
+      });
+
+      if (res.success) {
+        setSuccessMsg(`Đăng ký tài khoản "${cleanEmail}" thành công! Đã ghi nhận vai trò STAFF. Bạn có thể đăng nhập ngay.`);
+        setMode('login');
+      } else {
+        setErrorMsg(res.error || 'Lỗi tạo tài khoản mới.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi khởi tạo tài khoản mới.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === 'register') {
+      return handleRegister(e);
+    }
+
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -100,7 +164,7 @@ export default function LoginPage() {
       }
 
       // Case 3: Unregistered Email (Not invited yet by Admin)
-      setErrorMsg(`Tài khoản "${cleanEmail}" chưa được đăng ký trong hệ thống Fica Holding. Vui lòng nhờ Admin (fica.holding@gmail.com) mời bạn vào hệ thống trước khi đăng nhập!`);
+      setErrorMsg(`Tài khoản "${cleanEmail}" chưa được đăng ký trong hệ thống Fica Holding. Vui lòng nhờ Admin (fica.holding@gmail.com) mời bạn hoặc bấm "Đăng ký tài khoản"!`);
     } catch (err: any) {
       setErrorMsg(err.message || 'Có lỗi xảy ra trong quá trình xác thực.');
     } finally {
@@ -123,13 +187,39 @@ export default function LoginPage() {
 
           <h1 className="text-xl font-extrabold text-slate-100 tracking-wider">FICA HOLDING</h1>
           <p className="text-xs text-blue-400 font-semibold mt-1">Hệ Thống Quản Trị Tài Liệu Microsoft SharePoint</p>
+
+          {/* Mode Switcher Buttons */}
+          <div className="mt-4 flex rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setErrorMsg(''); }}
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                mode === 'login' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Đăng Nhập
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('register'); setErrorMsg(''); }}
+              className={`flex-1 py-1.5 rounded-lg font-bold transition-all ${
+                mode === 'register' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Đăng Ký Tài Khoản
+            </button>
+          </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleAuth} className="p-6 space-y-4">
           <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs flex items-center space-x-2 text-slate-300">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Hệ thống bảo mật RBAC — Chỉ chấp nhận Email thực được mời hoặc Admin gốc.</span>
+            <span>
+              {mode === 'login'
+                ? 'Hệ thống bảo mật RBAC — Vui lòng đăng nhập với tài khoản của bạn.'
+                : 'Đăng ký tài khoản thành viên Fica Holding mới với Tên, Email & Mật khẩu.'}
+            </span>
           </div>
 
           {errorMsg && (
@@ -146,15 +236,32 @@ export default function LoginPage() {
             </div>
           )}
 
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Họ và Tên thành viên (*):</label>
+              <div className="relative">
+                <Shield className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="VD: Nguyễn Văn Bình"
+                  className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 pl-9 pr-3 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 font-sans"
+                  required={mode === 'register'}
+                />
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Email Công ty / Email Được mời (*):</label>
+            <label className="block text-xs font-medium text-slate-300 mb-1">Email Công ty / Cá nhân (*):</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="fica.holding@gmail.com"
+                placeholder="user@company.com"
                 className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 pl-9 pr-3 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                 required
               />
@@ -169,19 +276,38 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="•••••••• (Tối thiểu 6 ký tự)"
                 className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 pl-9 pr-3 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 font-mono"
                 required
               />
             </div>
           </div>
 
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Phòng ban / Đơn vị:</label>
+              <input
+                type="text"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                placeholder="Phòng Tư Vấn Tài Chính"
+                className="w-full text-xs bg-slate-950 border border-slate-700 text-slate-100 px-3 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 font-sans"
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center space-x-2 min-h-[44px]"
           >
-            <span>{loading ? 'Đang xác thực...' : 'Đăng nhập vào SharePoint Hub'}</span>
+            <span>
+              {loading
+                ? 'Đang xử lý...'
+                : mode === 'login'
+                ? 'Đăng nhập vào SharePoint Hub'
+                : 'Tạo tài khoản thành viên mới'}
+            </span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
