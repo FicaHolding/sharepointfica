@@ -1707,41 +1707,47 @@ export const sharepointService = {
   // Subscribe to Supabase Realtime changes with Safe Error Boundary Guard
   subscribeRealtime(onTableChange: () => void, channelTag: string = 'app') {
     try {
-      const uniqueChannelName = `realtime-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      if (typeof window === 'undefined') return () => {};
+
+      const uniqueChannelName = `rt-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const channel = supabase
         .channel(uniqueChannelName)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'profiles' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'clients' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'folders' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'documents' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'files' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'audit_logs' },
-          () => onTableChange()
+          () => { try { onTableChange(); } catch {} }
         );
 
-      channel.subscribe();
+      channel.subscribe((status: any, err: any) => {
+        if (err) {
+          console.warn('Realtime status notice:', status, err);
+        }
+      });
 
       return () => {
         try {
