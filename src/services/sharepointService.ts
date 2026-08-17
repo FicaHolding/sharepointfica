@@ -1270,6 +1270,28 @@ export const sharepointService = {
         console.warn(`Supabase Storage upload notice (${SUPABASE_STORAGE_BUCKET}):`, storageError.message);
       }
 
+      // Save file content to cloud DB table file_contents for instant mobile cross-device sync
+      try {
+        if (file.size <= 8 * 1024 * 1024) {
+          const reader = new FileReader();
+          reader.onload = async () => {
+            if (reader.result) {
+              const base64Data = reader.result as string;
+              await supabase.from('file_contents').upsert([
+                {
+                  storage_path: storagePath,
+                  content_base64: base64Data,
+                  created_at: new Date().toISOString(),
+                },
+              ]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      } catch {
+        // Ignore DB content fallback error
+      }
+
       // Phase 2: Insert metadata record into Database `documents` & `files` tables
       const validClientId = isValidUUID(clientId) ? clientId : null;
       const validCreatedBy = isValidUUID(metadata.createdBy) ? metadata.createdBy : null;
@@ -1508,6 +1530,27 @@ export const sharepointService = {
 
       if (httpSignedUrl) {
         return { url: httpSignedUrl, httpSignedUrl: httpSignedUrl, isSigned: true };
+      }
+
+      // Try Cloud DB fallback for mobile devices
+      try {
+        const { data: dbContent } = await supabase
+          .from('file_contents')
+          .select('content_base64')
+          .or(`storage_path.eq.${cleanPath},storage_path.eq.${storagePath}`)
+          .maybeSingle();
+
+        if (dbContent?.content_base64) {
+          memoryFileCache.set(cleanPath, dbContent.content_base64);
+          memoryFileCache.set(storagePath, dbContent.content_base64);
+          return {
+            url: dbContent.content_base64,
+            httpSignedUrl: dbContent.content_base64,
+            isSigned: false,
+          };
+        }
+      } catch {
+        // Ignore DB content fallback
       }
 
       return {

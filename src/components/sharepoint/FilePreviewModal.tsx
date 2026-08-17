@@ -331,39 +331,39 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
           {/* Middle: Engine Selector for Word/Excel or Zoom Controls */}
           {(isDoc || isSpreadsheet) ? (
-            <div className="hidden sm:flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-sans">
+            <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-[11px] sm:text-xs font-sans">
               <button
                 onClick={() => setViewEngine('office')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
                   viewEngine === 'office'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Xem chuẩn Microsoft Word / Excel trên Web (Không cần tải file)"
               >
-                <span>🏢 MS Office Web (Mặc định)</span>
+                <span>🏢 <span className="hidden xs:inline">MS </span>Office<span className="hidden md:inline"> Web</span></span>
               </button>
               <button
                 onClick={() => setViewEngine('google')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
                   viewEngine === 'google'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Xem bằng Trình xem Google Docs (Không cần tải file)"
               >
-                <span>🌐 Google Docs</span>
+                <span>🌐 Google<span className="hidden md:inline"> Docs</span></span>
               </button>
               <button
                 onClick={() => setViewEngine('native')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
                   viewEngine === 'native'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Xem nhanh bản văn bản rút gọn"
               >
-                <span>📄 Xem Nhanh</span>
+                <span>📄 <span className="hidden xs:inline">Xem </span>Nhanh</span>
               </button>
             </div>
           ) : (
