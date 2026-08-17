@@ -308,7 +308,9 @@ function SharePointContent() {
     if (urlTabParam && ['active_clients', 'archived_clients', 'reports'].includes(urlTabParam)) {
       setActiveTab(urlTabParam);
     } else if (urlTabParam === 'settings') {
-      setIsUserManagementModalOpen(true);
+      // Clean up lingering ?tab=settings query parameter to return cleanly to main Dashboard
+      setActiveTab('active_clients');
+      updateUrlState(urlClientParam, urlFolderParam, 'active_clients', urlServiceParam);
     }
 
     if (urlServiceParam) {
