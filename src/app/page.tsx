@@ -1621,6 +1621,7 @@ function SharePointContent() {
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}
         currentUserRole={currentUser.role}
+        currentUserEmail={currentUser.email}
         companyLogoUrl={companyLogoUrl}
         onUpdateLogo={(newUrl) => {
           setCompanyLogoUrl(newUrl);

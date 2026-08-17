@@ -32,6 +32,7 @@ interface UserManagementModalProps {
   onAddUser: (newUser: Omit<UserProfile, 'id'>) => Promise<void> | void;
   onDeleteUser: (userId: string) => Promise<void> | void;
   currentUserRole: UserRole;
+  currentUserEmail?: string;
   companyLogoUrl?: string | null;
   onUpdateLogo?: (newUrl: string | null) => void;
   allFiles?: DocumentFile[];
@@ -46,6 +47,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   onAddUser,
   onDeleteUser,
   currentUserRole,
+  currentUserEmail,
   companyLogoUrl,
   onUpdateLogo,
   allFiles = [],
@@ -199,7 +201,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  const isSuperAdmin =
+    currentUserRole === 'admin' ||
+    (currentUserEmail || '').toLowerCase() === 'fica.holding@gmail.com';
 
   const safeUsers = dbUsers.length > 0 ? dbUsers : initialUsers;
 
@@ -223,9 +227,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
 
     // 3. Duplicate Email Check
-    const duplicate = safeUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    const duplicate = safeUsers.find((u) => u.email && u.email.toLowerCase() === cleanEmail);
     if (duplicate) {
-      setErrorMsg(`Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${duplicate.role.toUpperCase()}]!`);
+      setErrorMsg(`Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${(duplicate.role || 'staff').toUpperCase()}]!`);
       return;
     }
 
@@ -243,6 +247,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       if (!res.success) {
         setErrorMsg(res.error || 'Lỗi thêm người dùng');
         return;
+      }
+
+      if (res.profile) {
+        await onAddUser(res.profile);
       }
 
       setEmail('');
@@ -264,7 +272,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       return;
     }
 
-    if (currentUserRole !== 'admin') {
+    if (!isSuperAdmin) {
       alert('Chỉ tài khoản ADMIN mới có quyền gỡ bỏ thành viên.');
       return;
     }
@@ -273,6 +281,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       setLoading(true);
       try {
         await onDeleteUser(userId);
+        await sharepointService.deleteProfile(userId);
         await refreshUsers();
       } catch {
         setErrorMsg('Không thể xóa người dùng.');
@@ -482,7 +491,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 Tổng số thành viên trong hệ thống: <strong className="text-blue-700 font-mono">{safeUsers.length}</strong>
               </div>
 
-              {currentUserRole === 'admin' && (
+              {isSuperAdmin && (
                 <button
                   onClick={() => setShowAddForm(!showAddForm)}
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-all shadow-xs min-h-[44px]"
@@ -623,7 +632,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                               <span>Root Admin Gốc (Bảo vệ)</span>
                             </div>
-                          ) : currentUserRole === 'admin' ? (
+                          ) : isSuperAdmin ? (
                             <div className="flex items-center justify-end space-x-1">
                               {/* Change Role Dropdown */}
                               <select
@@ -773,10 +782,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
             )}
 
-            {currentUserRole !== 'admin' && (
+            {!isSuperAdmin && (
               <div className="p-3 bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs flex items-center space-x-2">
                 <Shield className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>Chế độ Chỉ xem (Read-Only). Chỉ tài khoản <strong>ADMIN</strong> mới có quyền tải lên hoặc xóa Logo công ty.</span>
+                <span>Chế độ Chỉ xem (Read-Only). Bạn đang đăng nhập với vai trò [<strong>{currentUserRole.toUpperCase()}</strong>]. Chỉ tài khoản <strong>ADMIN</strong> mới có quyền tải lên hoặc xóa Logo công ty.</span>
               </div>
             )}
 
@@ -798,7 +807,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   </p>
                 </div>
 
-                {currentUserRole === 'admin' && (
+                {isSuperAdmin && (
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                     <label className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all shadow-xs flex items-center space-x-2 min-h-[44px]">
                       {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
