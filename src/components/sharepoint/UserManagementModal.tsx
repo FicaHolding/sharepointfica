@@ -298,6 +298,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       return;
     }
 
+    const nextStatus = currentStatus === 'disabled' || target?.status === 'disabled' ? 'active' : 'disabled';
+    setDbUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, status: nextStatus } : u))
+    );
+
     setLoading(true);
     await sharepointService.toggleUserLockStatus(userId, currentStatus);
     await refreshUsers();
@@ -311,6 +316,10 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       alert('Tài khoản fica.holding@gmail.com là Root Admin gốc hệ thống và không thể bị hạ quyền!');
       return;
     }
+
+    setDbUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+    );
 
     setLoading(true);
     await sharepointService.updateUserRole(userId, newRole);
