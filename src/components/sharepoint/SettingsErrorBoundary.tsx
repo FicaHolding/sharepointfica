@@ -19,12 +19,24 @@ export class SettingsErrorBoundary extends Component<Props, State> {
     error: null,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    if (error?.message && error.message.toLowerCase().includes('postgres_changes')) {
-      console.warn('Suppressed background Supabase Realtime notice:', error.message);
+  public static getDerivedStateFromError(error: any): State {
+    const errorStr = (
+      typeof error === 'string'
+        ? error
+        : error?.message || error?.details || error?.reason || String(error || '')
+    ).toLowerCase();
+
+    if (
+      errorStr.includes('postgres_changes') ||
+      errorStr.includes('subscribe') ||
+      errorStr.includes('realtime')
+    ) {
+      console.warn('Suppressed background Supabase Realtime notice:', errorStr);
       return { hasError: false, error: null };
     }
-    return { hasError: true, error };
+
+    const errObj = error instanceof Error ? error : new Error(errorStr || 'Có ngoại lệ tạm thời trong modul Cài Đặt Hệ Thống.');
+    return { hasError: true, error: errObj };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
