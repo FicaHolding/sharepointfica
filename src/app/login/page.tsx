@@ -63,10 +63,14 @@ export default function LoginPage() {
         full_name: cleanName,
         department: department.trim() || 'Fica Holding',
         role: 'staff',
+        password: cleanPassword,
       });
 
       if (res.success) {
-        setSuccessMsg(`Đăng ký tài khoản "${cleanEmail}" thành công! Đã ghi nhận vai trò STAFF. Bạn có thể đăng nhập ngay.`);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`fica_pass_${cleanEmail}`, cleanPassword);
+        }
+        setSuccessMsg(`Đăng ký tài khoản "${cleanEmail}" thành công! Đã ghi nhận mật khẩu riêng. Bạn có thể đăng nhập ngay.`);
         setMode('login');
       } else {
         setErrorMsg(res.error || 'Lỗi tạo tài khoản mới.');
@@ -116,9 +120,11 @@ export default function LoginPage() {
 
       // Case 1: Root Admin Login
       if (cleanEmail === 'fica.holding@gmail.com') {
-        const isValidPassword = !authError || ['fica123', '123456', 'fica2026', 'admin123', 'fica'].includes(cleanPassword) || cleanPassword.length >= 6;
+        const adminSavedPass = typeof window !== 'undefined' ? localStorage.getItem('fica_pass_fica.holding@gmail.com') : null;
+        const isValidPassword = !authError || (adminSavedPass ? cleanPassword === adminSavedPass : ['fica123', '123456', 'fica2026', 'admin123', 'fica'].includes(cleanPassword));
+        
         if (!isValidPassword) {
-          setErrorMsg('Mật khẩu Admin không chính xác! Vui lòng nhập đúng mật khẩu bảo vệ.');
+          setErrorMsg('Mật khẩu Admin không chính xác! Vui lòng nhập đúng mật khẩu bảo vệ (phân biệt hoa/thường).');
           setLoading(false);
           return;
         }
@@ -147,19 +153,27 @@ export default function LoginPage() {
           return;
         }
 
-        const isValidPassword = !authError || cleanPassword.length >= 6;
-        if (!isValidPassword) {
-          setErrorMsg('Mật khẩu tài khoản phải có ít nhất 6 ký tự! Vui lòng kiểm tra lại mật khẩu.');
+        // STRICT CASE-SENSITIVE PASSWORD VERIFICATION
+        const savedPass = matchedProfile.password || (typeof window !== 'undefined' ? localStorage.getItem(`fica_pass_${cleanEmail}`) : null);
+
+        if (savedPass && cleanPassword !== savedPass) {
+          setErrorMsg(`Mật khẩu không chính xác! Phân biệt chữ hoa và chữ thường (Ví dụ: "huy@123" khác "Huy@123"). Vui lòng nhập đúng mật khẩu!`);
           setLoading(false);
           return;
         }
 
-        document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('fica_user_profile', JSON.stringify(matchedProfile));
-          localStorage.setItem('fica_current_user_email', cleanEmail);
+        if (!authError || (savedPass ? cleanPassword === savedPass : cleanPassword.length >= 6)) {
+          document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_user_profile', JSON.stringify(matchedProfile));
+            localStorage.setItem('fica_current_user_email', cleanEmail);
+          }
+          window.location.href = '/';
+          return;
         }
-        window.location.href = '/';
+
+        setErrorMsg('Mật khẩu tài khoản không chính xác! Vui lòng kiểm tra lại.');
+        setLoading(false);
         return;
       }
 

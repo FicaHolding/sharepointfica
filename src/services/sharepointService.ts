@@ -307,6 +307,7 @@ export const sharepointService = {
       phone: profile.phone?.trim() || undefined,
       status: 'pending', // Smart Invite Pending Activation
       invited_at: new Date().toISOString(),
+      password: profile.password || undefined,
     };
 
     // 1. Save to LocalStorage immediately for instant, zero-fail persistence

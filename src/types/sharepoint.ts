@@ -10,6 +10,7 @@ export interface UserProfile {
   avatar_url?: string;
   status?: 'pending' | 'active' | 'disabled';
   invited_at?: string;
+  password?: string;
 }
 
 export type ClientStatus = 'active' | 'archived';

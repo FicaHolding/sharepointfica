@@ -113,8 +113,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           full_name: fullNameValue,
           department: deptValue,
           phone: phoneValue,
+          ...(newPassword ? { password: newPassword } : {}),
         };
         localStorage.setItem('fica_user_profile', JSON.stringify(stored));
+        if (newPassword && currentUser.email) {
+          localStorage.setItem(`fica_pass_${currentUser.email.toLowerCase()}`, newPassword);
+        }
       }
 
       // 2. Update Supabase Auth User Metadata / Password
