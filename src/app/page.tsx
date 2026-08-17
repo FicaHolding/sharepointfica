@@ -19,6 +19,7 @@ import { DetailsPane } from '@/components/sharepoint/DetailsPane';
 import { AuditLogTab } from '@/components/sharepoint/AuditLogTab';
 import { BulkMetadataModal } from '@/components/sharepoint/BulkMetadataModal';
 import { UserManagementModal } from '@/components/sharepoint/UserManagementModal';
+import { SettingsErrorBoundary } from '@/components/sharepoint/SettingsErrorBoundary';
 import { UserProfileModal } from '@/components/sharepoint/UserProfileModal';
 import { RenameClientModal } from '@/components/sharepoint/RenameClientModal';
 import { DeleteClientModal } from '@/components/sharepoint/DeleteClientModal';
@@ -1616,32 +1617,34 @@ function SharePointContent() {
         userRole={currentUser.role}
       />
 
-      <UserManagementModal
-        isOpen={isUserManagementModalOpen}
-        onClose={() => {
-          setIsUserManagementModalOpen(false);
-          const targetTab = activeTab === 'settings' ? 'active_clients' : activeTab;
-          setActiveTab(targetTab);
-          updateUrlState(selectedClient?.id, selectedSubFolder?.id, targetTab, filterState.serviceType);
-        }}
-        users={systemUsers}
-        onAddUser={handleAddUser}
-        onDeleteUser={handleDeleteUser}
-        currentUserRole={currentUser.role}
-        currentUserEmail={currentUser.email}
-        companyLogoUrl={companyLogoUrl}
-        onUpdateLogo={(newUrl) => {
-          setCompanyLogoUrl(newUrl);
-          if (newUrl) {
-            addToast('success', 'Đã lưu vĩnh viễn Logo thương hiệu công ty mới!');
-          } else {
-            addToast('info', 'Đã khôi phục về Logo FICA mặc định.');
-          }
-        }}
-        allFiles={files}
-        onRefreshFiles={() => router.refresh()}
-        allClients={clients}
-      />
+      <SettingsErrorBoundary onClose={() => setIsUserManagementModalOpen(false)}>
+        <UserManagementModal
+          isOpen={isUserManagementModalOpen}
+          onClose={() => {
+            setIsUserManagementModalOpen(false);
+            const targetTab = activeTab === 'settings' ? 'active_clients' : activeTab;
+            setActiveTab(targetTab);
+            updateUrlState(selectedClient?.id, selectedSubFolder?.id, targetTab, filterState.serviceType);
+          }}
+          users={systemUsers}
+          onAddUser={handleAddUser}
+          onDeleteUser={handleDeleteUser}
+          currentUserRole={currentUser.role}
+          currentUserEmail={currentUser.email}
+          companyLogoUrl={companyLogoUrl}
+          onUpdateLogo={(newUrl) => {
+            setCompanyLogoUrl(newUrl);
+            if (newUrl) {
+              addToast('success', 'Đã lưu vĩnh viễn Logo thương hiệu công ty mới!');
+            } else {
+              addToast('info', 'Đã khôi phục về Logo FICA mặc định.');
+            }
+          }}
+          allFiles={files}
+          onRefreshFiles={() => router.refresh()}
+          allClients={clients}
+        />
+      </SettingsErrorBoundary>
 
       <NewClientModal
         isOpen={isNewClientModalOpen}

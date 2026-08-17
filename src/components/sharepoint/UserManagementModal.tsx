@@ -219,7 +219,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     currentUserRole === 'admin' ||
     (currentUserEmail || '').toLowerCase() === 'fica.holding@gmail.com';
 
-  const safeUsers = dbUsers.length > 0 ? dbUsers : initialUsers;
+  const safeUsers =
+    Array.isArray(dbUsers) && dbUsers.length > 0
+      ? dbUsers
+      : Array.isArray(initialUsers)
+      ? initialUsers
+      : [];
 
   // SMART MEMBER INVITE & VALIDATION HANDLER
   const handleCreateUser = async (e: React.FormEvent) => {
