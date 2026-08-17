@@ -1704,49 +1704,55 @@ export const sharepointService = {
     }
   },
 
-  // Subscribe to Supabase Realtime changes with Unique Channel Instance per caller
+  // Subscribe to Supabase Realtime changes with Safe Error Boundary Guard
   subscribeRealtime(onTableChange: () => void, channelTag: string = 'app') {
-    const uniqueChannelName = `realtime-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const channel = supabase
-      .channel(uniqueChannelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles' },
-        () => onTableChange()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'clients' },
-        () => onTableChange()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'folders' },
-        () => onTableChange()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'documents' },
-        () => onTableChange()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'files' },
-        () => onTableChange()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'audit_logs' },
-        () => onTableChange()
-      )
-      .subscribe();
+    try {
+      const uniqueChannelName = `realtime-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const channel = supabase
+        .channel(uniqueChannelName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          () => onTableChange()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'clients' },
+          () => onTableChange()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'folders' },
+          () => onTableChange()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents' },
+          () => onTableChange()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'files' },
+          () => onTableChange()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'audit_logs' },
+          () => onTableChange()
+        );
 
-    return () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch {
-        // Ignore channel cleanup exception
-      }
-    };
+      channel.subscribe();
+
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Ignore channel cleanup exception
+        }
+      };
+    } catch (err: any) {
+      console.warn('Realtime subscription notice:', err?.message);
+      return () => {};
+    }
   },
 };

@@ -191,9 +191,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       refreshUsers();
-      const unsubscribe = sharepointService.subscribeRealtime(() => {
-        refreshUsers();
-      }, 'modal-rbac');
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -204,13 +201,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        if (unsubscribe) {
-          try {
-            unsubscribe();
-          } catch {
-            // Ignore
-          }
-        }
       };
     }
   }, [isOpen]);
