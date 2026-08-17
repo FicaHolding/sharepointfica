@@ -1704,10 +1704,11 @@ export const sharepointService = {
     }
   },
 
-  // Subscribe to Supabase Realtime changes including profiles and documents
-  subscribeRealtime(onTableChange: () => void) {
+  // Subscribe to Supabase Realtime changes with Unique Channel Instance per caller
+  subscribeRealtime(onTableChange: () => void, channelTag: string = 'app') {
+    const uniqueChannelName = `realtime-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const channel = supabase
-      .channel('sharepoint-realtime-changes')
+      .channel(uniqueChannelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
@@ -1741,7 +1742,11 @@ export const sharepointService = {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // Ignore channel cleanup exception
+      }
     };
   },
 };

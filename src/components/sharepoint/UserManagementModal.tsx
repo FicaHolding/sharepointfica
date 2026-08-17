@@ -193,7 +193,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       refreshUsers();
       const unsubscribe = sharepointService.subscribeRealtime(() => {
         refreshUsers();
-      });
+      }, 'modal-rbac');
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
