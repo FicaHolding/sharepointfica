@@ -305,8 +305,10 @@ function SharePointContent() {
     const urlTabParam = searchParams.get('tab') as ActiveNavTab | null;
     const urlServiceParam = searchParams.get('service');
 
-    if (urlTabParam && ['active_clients', 'archived_clients', 'reports', 'settings'].includes(urlTabParam)) {
+    if (urlTabParam && ['active_clients', 'archived_clients', 'reports'].includes(urlTabParam)) {
       setActiveTab(urlTabParam);
+    } else if (urlTabParam === 'settings') {
+      setIsUserManagementModalOpen(true);
     }
 
     if (urlServiceParam) {
@@ -1618,9 +1620,9 @@ function SharePointContent() {
         isOpen={isUserManagementModalOpen}
         onClose={() => {
           setIsUserManagementModalOpen(false);
-          if (activeTab === 'settings') {
-            setActiveTab('active_clients');
-          }
+          const targetTab = activeTab === 'settings' ? 'active_clients' : activeTab;
+          setActiveTab(targetTab);
+          updateUrlState(selectedClient?.id, selectedSubFolder?.id, targetTab, filterState.serviceType);
         }}
         users={systemUsers}
         onAddUser={handleAddUser}
