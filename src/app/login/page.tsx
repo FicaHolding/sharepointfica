@@ -157,7 +157,7 @@ export default function LoginPage() {
         const savedPass = matchedProfile.password || (typeof window !== 'undefined' ? localStorage.getItem(`fica_pass_${cleanEmail}`) : null);
 
         if (savedPass && cleanPassword !== savedPass) {
-          setErrorMsg(`Mật khẩu không chính xác! Phân biệt chữ hoa và chữ thường (Ví dụ: "huy@123" khác "Huy@123"). Vui lòng nhập đúng mật khẩu!`);
+          setErrorMsg('Mật khẩu không chính xác! Vui lòng kiểm tra lại mật khẩu (lưu ý hệ thống có phân biệt chữ hoa và chữ thường).');
           setLoading(false);
           return;
         }
