@@ -403,28 +403,46 @@ export const sharepointService = {
     return { success: true, folder: folderObj };
   },
 
-  // Rename SubFolder
-  async renameSubFolder(folderId: string, newName: string): Promise<{ success: boolean; error?: string }> {
+  // Rename SubFolder (Support both custom subfolders and default system template subfolders)
+  async renameSubFolder(folderId: string, newName: string, clientId?: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (isValidUUID(folderId)) {
-        await supabase.from('folders').update({ name: newName.trim(), updated_at: new Date().toISOString() }).eq('id', folderId);
+        await supabase.from('folders').upsert([
+          {
+            id: folderId,
+            client_id: clientId || null,
+            name: newName.trim(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
       }
     } catch {
       // Ignore
     }
 
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('fica_custom_subfolders');
-      if (stored) {
-        try {
-          let folders: FolderItem[] = JSON.parse(stored);
-          if (Array.isArray(folders)) {
-            folders = folders.map((f) => (f.id === folderId ? { ...f, name: newName.trim(), updated_at: new Date().toISOString() } : f));
-            localStorage.setItem('fica_custom_subfolders', JSON.stringify(folders));
-          }
-        } catch {
-          // Ignore
+      try {
+        const stored = localStorage.getItem('fica_custom_subfolders');
+        let folders: FolderItem[] = stored ? JSON.parse(stored) : [];
+        if (!Array.isArray(folders)) folders = [];
+
+        const idx = folders.findIndex((f) => f.id === folderId);
+        if (idx >= 0) {
+          folders[idx] = { ...folders[idx], name: newName.trim(), updated_at: new Date().toISOString() };
+        } else {
+          folders.push({
+            id: folderId,
+            client_id: clientId || '',
+            name: newName.trim(),
+            is_system_folder: true,
+            created_by: 'Admin',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
         }
+        localStorage.setItem('fica_custom_subfolders', JSON.stringify(folders));
+      } catch {
+        // Ignore
       }
     }
 

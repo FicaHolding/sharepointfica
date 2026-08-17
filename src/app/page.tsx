@@ -417,6 +417,7 @@ function SharePointContent() {
   const [isNewSubfolderModalOpen, setIsNewSubfolderModalOpen] = useState(false);
   const [selectedSubfolderForRename, setSelectedSubfolderForRename] = useState<FolderItem | null>(null);
   const [selectedSubfolderForDelete, setSelectedSubfolderForDelete] = useState<FolderItem | null>(null);
+  const [customSubFolders, setCustomSubFolders] = useState<FolderItem[]>([]);
   const [previewFile, setPreviewFile] = useState<DocumentFile | null>(null);
   const [selectedFileForVersionHistory, setSelectedFileForVersionHistory] = useState<DocumentFile | null>(null);
   const [detailsItem, setDetailsItem] = useState<{
@@ -540,6 +541,19 @@ function SharePointContent() {
 
     loadRealFiles();
   }, [selectedClient, selectedSubFolder]);
+
+  // Load custom/renamed subfolders when selected client changes
+  useEffect(() => {
+    async function loadFolders() {
+      if (selectedClient) {
+        const fetched = await sharepointService.fetchFolders(selectedClient.id);
+        setCustomSubFolders(fetched);
+      } else {
+        setCustomSubFolders([]);
+      }
+    }
+    loadFolders();
+  }, [selectedClient]);
 
   // AUDIT LOGS STATE (Valid UUIDs)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([
@@ -697,6 +711,7 @@ function SharePointContent() {
 
     const res = await sharepointService.createSubFolder(selectedClient.id, name);
     if (res.success && res.folder) {
+      setCustomSubFolders((prev) => [...prev, res.folder!]);
       addToast('success', 'Đã tạo thư mục mới thành công!', res.folder.name);
       pushAuditLog('UPDATE_METADATA', `Tạo thư mục mới [${res.folder.name}] cho khách hàng ${selectedClient.folder_name}`, undefined, selectedClient.folder_name);
       router.refresh();
@@ -706,8 +721,30 @@ function SharePointContent() {
   };
 
   const handleRenameSubfolder = async (folderId: string, newName: string) => {
-    const res = await sharepointService.renameSubFolder(folderId, newName);
+    const res = await sharepointService.renameSubFolder(folderId, newName, selectedClient?.id);
     if (res.success) {
+      setCustomSubFolders((prev) => {
+        const idx = prev.findIndex((f) => f.id === folderId);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], name: newName.trim(), updated_at: new Date().toISOString() };
+          return updated;
+        } else {
+          const targetDefault = currentSubFolders.find((f) => f.id === folderId);
+          const newItem: FolderItem = targetDefault
+            ? { ...targetDefault, name: newName.trim(), updated_at: new Date().toISOString() }
+            : {
+                id: folderId,
+                client_id: selectedClient?.id || '',
+                name: newName.trim(),
+                is_system_folder: true,
+                created_by: 'Admin',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+          return [...prev, newItem];
+        }
+      });
       addToast('success', 'Đã đổi tên thư mục thành công!', `Tên mới: ${newName}`);
       pushAuditLog('UPDATE_METADATA', `Đổi tên thư mục thành ${newName}`, undefined, selectedClient?.folder_name);
       router.refresh();
@@ -720,6 +757,7 @@ function SharePointContent() {
     const target = currentSubFolders.find((s) => s.id === folderId);
     const success = await sharepointService.deleteSubFolder(folderId);
     if (success) {
+      setCustomSubFolders((prev) => prev.filter((s) => s.id !== folderId));
       addToast('info', 'Đã xóa thư mục thành công', target?.name);
       pushAuditLog('UPDATE_METADATA', `Xóa thư mục ${target?.name || ''}`, undefined, selectedClient?.folder_name);
       router.refresh();
@@ -979,11 +1017,24 @@ function SharePointContent() {
     }
   };
 
-  // Derived subfolders for selected client
+  // Derived subfolders for selected client (Merges standard templates with custom created & renamed subfolders)
   const currentSubFolders = useMemo(() => {
     if (!selectedClient) return [];
-    return createSubfoldersForClient(selectedClient.id);
-  }, [selectedClient]);
+    const defaults = createSubfoldersForClient(selectedClient.id);
+
+    const map = new Map<string, FolderItem>();
+    for (const d of defaults) {
+      map.set(d.id, d);
+    }
+
+    for (const c of customSubFolders) {
+      if (c.client_id === selectedClient.id || !c.client_id) {
+        map.set(c.id, c);
+      }
+    }
+
+    return Array.from(map.values());
+  }, [selectedClient, customSubFolders]);
 
   const activeClientsList = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
   const archivedClientsList = useMemo(() => clients.filter((c) => c.status === 'archived'), [clients]);
