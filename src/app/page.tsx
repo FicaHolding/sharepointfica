@@ -256,8 +256,10 @@ function SharePointContent() {
       params.set('folder', folderId);
     }
 
-    if (tabName && tabName !== 'active_clients') {
-      params.set('tab', tabName);
+    if (tabName && ['active_clients', 'archived_clients', 'reports'].includes(tabName)) {
+      if (tabName !== 'active_clients') {
+        params.set('tab', tabName);
+      }
     }
 
     const activeService = serviceType !== undefined ? serviceType : filterState.serviceType;
@@ -307,10 +309,6 @@ function SharePointContent() {
 
     if (urlTabParam && ['active_clients', 'archived_clients', 'reports'].includes(urlTabParam)) {
       setActiveTab(urlTabParam);
-    } else if (urlTabParam === 'settings') {
-      // Clean up lingering ?tab=settings query parameter to return cleanly to main Dashboard
-      setActiveTab('active_clients');
-      updateUrlState(urlClientParam, urlFolderParam, 'active_clients', urlServiceParam);
     }
 
     if (urlServiceParam) {
