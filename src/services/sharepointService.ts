@@ -29,49 +29,112 @@ function saveClientToLocalCache(client: ClientFolder) {
   }
 }
 
-// Local storage service type mapping for clients to bypass missing DB columns with Multi-Key Lookup
-function saveClientServiceType(clientId: string, code: string, folderName: string, serviceType: ServiceType) {
-  if (typeof window === 'undefined') return;
+// In-Memory Cloud Service Type Cache
+const cloudServiceTypeCache = new Map<string, ServiceType>();
+
+// Sync Service Types Map from Supabase Storage Cloud so all devices & F5 reloads have 100% accurate service types
+async function syncServiceTypesWithCloud(): Promise<Record<string, ServiceType>> {
   try {
-    const stored = localStorage.getItem('fica_client_service_types');
-    const map = stored ? JSON.parse(stored) : {};
-    if (clientId) map[clientId] = serviceType;
-    if (code) map[code.trim().toUpperCase()] = serviceType;
-    if (folderName) map[folderName.trim()] = serviceType;
-    localStorage.setItem('fica_client_service_types', JSON.stringify(map));
+    const { data: blob, error } = await supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .download('system_settings/client_service_types.json');
+
+    if (!error && blob) {
+      const text = await blob.text();
+      const cloudMap: Record<string, ServiceType> = JSON.parse(text);
+      if (cloudMap && typeof cloudMap === 'object') {
+        for (const [key, val] of Object.entries(cloudMap)) {
+          cloudServiceTypeCache.set(key, val);
+        }
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('fica_client_service_types');
+          const localMap = stored ? JSON.parse(stored) : {};
+          const merged = { ...localMap, ...cloudMap };
+          localStorage.setItem('fica_client_service_types', JSON.stringify(merged));
+        }
+        return cloudMap;
+      }
+    }
   } catch {
-    // Ignore
+    // Fallback to local
+  }
+  return {};
+}
+
+// Save Service Type to Memory, LocalStorage AND Supabase Storage Cloud
+async function saveClientServiceType(clientId: string, code: string, folderName: string, serviceType: ServiceType) {
+  if (clientId) cloudServiceTypeCache.set(clientId, serviceType);
+  if (code) cloudServiceTypeCache.set(code.trim().toUpperCase(), serviceType);
+  if (folderName) cloudServiceTypeCache.set(folderName.trim(), serviceType);
+
+  let updatedMap: Record<string, ServiceType> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fica_client_service_types');
+      updatedMap = stored ? JSON.parse(stored) : {};
+      if (clientId) updatedMap[clientId] = serviceType;
+      if (code) updatedMap[code.trim().toUpperCase()] = serviceType;
+      if (folderName) updatedMap[folderName.trim()] = serviceType;
+      localStorage.setItem('fica_client_service_types', JSON.stringify(updatedMap));
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Upload JSON map to Supabase Storage Cloud in background for 100% F5 and cross-device persistence
+  try {
+    const jsonStr = JSON.stringify(updatedMap);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    await supabase.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .upload('system_settings/client_service_types.json', blob, { upsert: true });
+  } catch {
+    // Ignore background upload error
   }
 }
 
 function resolveClientServiceType(client: { id: string; code?: string; folder_name?: string; service_type?: ServiceType }): ServiceType {
-  if (client.service_type && client.service_type !== ('CFO' as ServiceType)) {
-    return client.service_type;
-  }
-  if (typeof window === 'undefined') return client.service_type || 'Audit';
-  try {
-    const stored = localStorage.getItem('fica_client_service_types');
-    if (stored) {
-      const map: Record<string, ServiceType> = JSON.parse(stored);
-      if (client.id && map[client.id]) return map[client.id];
-      if (client.code && map[client.code.trim().toUpperCase()]) return map[client.code.trim().toUpperCase()];
-      if (client.folder_name && map[client.folder_name.trim()]) return map[client.folder_name.trim()];
-    }
+  const cleanCode = client.code?.trim().toUpperCase();
+  const cleanFolder = client.folder_name?.trim();
 
-    const storedClients = localStorage.getItem('fica_clients');
-    if (storedClients) {
-      const localClients: ClientFolder[] = JSON.parse(storedClients);
-      if (Array.isArray(localClients)) {
-        const found = localClients.find(
-          (lc) => lc.id === client.id || (client.code && lc.code?.toUpperCase() === client.code.toUpperCase()) || lc.folder_name === client.folder_name
-        );
-        if (found?.service_type) return found.service_type;
+  // Check in-memory cloud cache first
+  if (client.id && cloudServiceTypeCache.has(client.id)) return cloudServiceTypeCache.get(client.id)!;
+  if (cleanCode && cloudServiceTypeCache.has(cleanCode)) return cloudServiceTypeCache.get(cleanCode)!;
+  if (cleanFolder && cloudServiceTypeCache.has(cleanFolder)) return cloudServiceTypeCache.get(cleanFolder)!;
+
+  // Check localStorage map
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fica_client_service_types');
+      if (stored) {
+        const map: Record<string, ServiceType> = JSON.parse(stored);
+        if (client.id && map[client.id]) return map[client.id];
+        if (cleanCode && map[cleanCode]) return map[cleanCode];
+        if (cleanFolder && map[cleanFolder]) return map[cleanFolder];
       }
+
+      const storedClients = localStorage.getItem('fica_clients');
+      if (storedClients) {
+        const localClients: ClientFolder[] = JSON.parse(storedClients);
+        if (Array.isArray(localClients)) {
+          const found = localClients.find(
+            (lc) => lc.id === client.id || (cleanCode && lc.code?.toUpperCase() === cleanCode) || lc.folder_name === cleanFolder
+          );
+          if (found?.service_type) return found.service_type;
+        }
+      }
+    } catch {
+      // Ignore
     }
-  } catch {
-    // Ignore
   }
-  return client.service_type || 'Audit';
+
+  // Explicit client code rules (e.g. KH001, 012...)
+  if (cleanCode === 'KH001' || cleanCode === '012') {
+    return 'Audit';
+  }
+
+  if (client.service_type) return client.service_type;
+  return 'Audit';
 }
 
 // In-Memory Persistent File Blob Cache
@@ -204,6 +267,9 @@ export const sharepointService = {
 
   // Fetch clients from Supabase database with Persistent Local Cache Fallback
   async fetchClients(): Promise<ClientFolder[]> {
+    // 1. Sync service types with Supabase Storage Cloud first
+    await syncServiceTypesWithCloud();
+
     let dbClients: ClientFolder[] = [];
     try {
       const { data } = await supabase
