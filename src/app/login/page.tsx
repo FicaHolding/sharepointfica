@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { FicaLogo } from '@/components/sharepoint/FicaLogo';
@@ -17,9 +17,22 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const router = useRouter();
 
   const supabase = createClient();
+
+  useEffect(() => {
+    async function loadLogo() {
+      try {
+        const url = await sharepointService.getCompanyLogoUrl();
+        if (url) setCompanyLogoUrl(url);
+      } catch {
+        // Ignore
+      }
+    }
+    loadLogo();
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,7 +209,7 @@ export default function LoginPage() {
         {/* Header Branding with Fica Logo */}
         <div className="p-8 text-center bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800">
           <div className="w-16 h-16 mx-auto mb-3 flex items-center justify-center">
-            <FicaLogo className="w-16 h-16" />
+            <FicaLogo className="w-16 h-16" logoUrl={companyLogoUrl} />
           </div>
 
           <h1 className="text-xl font-extrabold text-slate-100 tracking-wider">FICA HOLDING</h1>
