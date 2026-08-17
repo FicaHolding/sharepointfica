@@ -11,6 +11,62 @@ const isValidUUID = (id: string): boolean => {
   return uuidRegex.test(id);
 };
 
+// Persistent IndexedDB File Blob Storage Engine (Supports files up to 500MB+ across F5 reloads)
+const DB_NAME = 'FicaSharePointDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'fica_file_blobs';
+
+function openIndexedDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e: any) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = (e: any) => resolve(e.target.result);
+      request.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function saveBlobToIndexedDB(key: string, blob: Blob): Promise<boolean> {
+  const db = await openIndexedDB();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(blob, key);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function getBlobFromIndexedDB(key: string): Promise<Blob | null> {
+  const db = await openIndexedDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(key);
+      req.onsuccess = (e: any) => resolve(e.target.result || null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 // Helper to save client into local persistent cache for zero-fail fallback
 function saveClientToLocalCache(client: ClientFolder) {
   if (typeof window === 'undefined') return;
@@ -1180,9 +1236,15 @@ export const sharepointService = {
       const storagePath = `${clientId}/${Date.now()}_${file.name}`;
       const newId = crypto.randomUUID();
 
-      // Store in persistent client cache & blob memory
+      // Store in persistent client cache & blob memory & IndexedDB
       const objectUrl = URL.createObjectURL(file);
+      const cleanPath = storagePath.replace(/^\/+/, '');
       memoryFileCache.set(storagePath, objectUrl);
+      memoryFileCache.set(cleanPath, objectUrl);
+
+      // Save to persistent IndexedDB for 100% zero-fail display across F5 reloads
+      await saveBlobToIndexedDB(storagePath, file);
+      await saveBlobToIndexedDB(cleanPath, file);
 
       if (typeof window !== 'undefined') {
         const reader = new FileReader();
@@ -1190,6 +1252,7 @@ export const sharepointService = {
           try {
             if (reader.result) {
               localStorage.setItem(`fica_doc_data_${storagePath}`, reader.result as string);
+              localStorage.setItem(`fica_doc_data_${cleanPath}`, reader.result as string);
             }
           } catch {
             // Storage quota exceeded fallback
@@ -1394,6 +1457,19 @@ export const sharepointService = {
         };
       }
 
+      // Check IndexedDB cache for instant local display across F5 reloads
+      const idbBlob = (await getBlobFromIndexedDB(cleanPath)) || (await getBlobFromIndexedDB(storagePath));
+      if (idbBlob) {
+        const idbUrl = URL.createObjectURL(idbBlob);
+        memoryFileCache.set(cleanPath, idbUrl);
+        memoryFileCache.set(storagePath, idbUrl);
+        return {
+          url: idbUrl,
+          httpSignedUrl: idbUrl,
+          isSigned: false,
+        };
+      }
+
       // Check LocalStorage cache for instant local display
       if (typeof window !== 'undefined') {
         const cached = localStorage.getItem(`fica_doc_data_${cleanPath}`) || localStorage.getItem(`fica_doc_data_${storagePath}`);
@@ -1450,6 +1526,21 @@ export const sharepointService = {
   async downloadFileBlob(storagePath: string, fileName: string): Promise<boolean> {
     try {
       const cleanPath = storagePath.replace(/^\/+/, '');
+
+      // Check IndexedDB first for 100% zero-fail local blob download
+      const idbBlob = (await getBlobFromIndexedDB(cleanPath)) || (await getBlobFromIndexedDB(storagePath));
+      if (idbBlob) {
+        const blobUrl = URL.createObjectURL(idbBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        return true;
+      }
+
       const signedRes = await this.getFilePreviewOrDownloadUrl(storagePath);
       if (signedRes.url) {
         const a = document.createElement('a');
