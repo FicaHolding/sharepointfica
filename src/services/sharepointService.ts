@@ -1183,35 +1183,40 @@ export const sharepointService = {
 
   // Get Permanent Company Logo URL across PC & Mobile Devices
   async getCompanyLogoUrl(): Promise<string | null> {
-    // 1. Try Supabase Storage Cloud first for Mobile devices
-    try {
-      const { data: signedData } = await supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .createSignedUrl('system_settings/company_logo.png', 3600);
+    // 1. Check LocalStorage FIRST for instant, zero-fail Base64 logo on F5 reloads
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_company_logo');
+      if (stored && (stored.startsWith('data:image/') || stored.startsWith('blob:'))) {
+        return stored;
+      }
+    }
 
-      if (signedData?.signedUrl) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('fica_company_logo', signedData.signedUrl);
+    // 2. Fetch from Supabase Storage Cloud for Mobile devices or fresh browsers
+    try {
+      const { data: blob, error } = await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .download('system_settings/company_logo.png');
+
+      if (!error && blob) {
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = (e) => reject(e);
+          reader.readAsDataURL(blob);
+        });
+
+        if (base64Data) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_company_logo', base64Data);
+            localStorage.setItem('fica_company_logo_path', 'system_settings/company_logo.png');
+          }
+          return base64Data;
         }
-        return signedData.signedUrl;
       }
     } catch {
       // Fallback
     }
 
-    try {
-      const { data: publicData } = supabase.storage
-        .from(SUPABASE_STORAGE_BUCKET)
-        .getPublicUrl('system_settings/company_logo.png');
-
-      if (publicData?.publicUrl) {
-        return publicData.publicUrl;
-      }
-    } catch {
-      // Fallback
-    }
-
-    // 2. Fallback to local storage if available
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('fica_company_logo');
       if (stored) return stored;
@@ -1220,12 +1225,19 @@ export const sharepointService = {
   },
 
   // Reset/Remove Company Logo back to default
-  removeCompanyLogo() {
+  async removeCompanyLogo(): Promise<void> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fica_company_logo');
       localStorage.removeItem('fica_company_logo_path');
     }
-    this.logAudit({
+    try {
+      await supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .remove(['system_settings/company_logo.png']);
+    } catch {
+      // Ignore
+    }
+    await this.logAudit({
       action_type: 'UPDATE_METADATA',
       action_details: 'Đã xóa Logo tùy chỉnh và khôi phục về Logo Fica mặc định',
       performed_by_name: 'Admin',
