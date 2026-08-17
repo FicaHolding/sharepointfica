@@ -46,7 +46,7 @@ export default function LoginPage() {
               cleanEmail
             );
           }
-          router.push('/');
+          window.location.href = '/';
           return;
         }
         setErrorMsg(`Đăng nhập thất bại: ${error.message}`);
@@ -55,7 +55,7 @@ export default function LoginPage() {
         if (typeof window !== 'undefined') {
           localStorage.setItem('fica_current_user_email', cleanEmail);
         }
-        router.push('/');
+        window.location.href = '/';
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Có lỗi xảy ra trong quá trình xác thực.');
