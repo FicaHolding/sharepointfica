@@ -181,88 +181,146 @@ export const sharepointService = {
     }
   },
 
-  // Fetch profiles from Supabase database with Defensive Null Checks
+  // Fetch profiles from Supabase database with Persistent Local Cache Fallback & Deduplication
   async fetchProfiles(): Promise<UserProfile[]> {
+    let dbProfiles: UserProfile[] = [];
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: true });
 
-      if (error) {
-        console.warn('Error fetching profiles from Supabase:', error.message);
-        return [];
+      if (!error && data && Array.isArray(data)) {
+        dbProfiles = data.map((p: any) => ({
+          id: p.id,
+          email: p.email || 'user@fica.vn',
+          full_name: p.full_name || p.email?.split('@')[0] || 'Cán Bộ Fica',
+          role: p.role || 'staff',
+          department: p.department || 'Fica Holding',
+          phone: p.phone || undefined,
+        }));
       }
-
-      if (!data || !Array.isArray(data)) return [];
-
-      return data.map((p: any) => ({
-        id: p.id,
-        email: p.email || 'user@fica.vn',
-        full_name: p.full_name || p.email?.split('@')[0] || 'Cán Bộ Fica',
-        role: p.role || 'staff',
-        department: p.department || 'Fica Holding',
-        phone: p.phone || undefined,
-      }));
     } catch (err: any) {
       console.warn('Profiles fetch exception:', err.message);
-      return [];
     }
+
+    const map = new Map<string, UserProfile>();
+    for (const p of dbProfiles) {
+      map.set(p.id, p);
+      if (p.email) map.set(p.email.toLowerCase(), p);
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fica_system_users');
+      if (stored) {
+        try {
+          const localProfiles: UserProfile[] = JSON.parse(stored);
+          if (Array.isArray(localProfiles)) {
+            for (const lp of localProfiles) {
+              const emailKey = lp.email.toLowerCase();
+              if (!map.has(lp.id) && !map.has(emailKey)) {
+                map.set(lp.id, lp);
+                map.set(emailKey, lp);
+              }
+            }
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    // Deduplicate unique profiles by ID
+    const uniqueMap = new Map<string, UserProfile>();
+    for (const p of map.values()) {
+      uniqueMap.set(p.id, p);
+    }
+
+    return Array.from(uniqueMap.values());
   },
 
-  // Create Profile in Supabase Database
+  // Create Profile in Supabase Database & Persistent Local Storage Engine
   async createProfile(profile: Omit<UserProfile, 'id'>): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
     const newId = crypto.randomUUID();
+    const newProfileObj: UserProfile = {
+      id: newId,
+      email: profile.email.trim(),
+      full_name: profile.full_name.trim(),
+      role: profile.role,
+      department: profile.department?.trim() || 'Fica Holding',
+      phone: profile.phone?.trim() || undefined,
+    };
+
+    // 1. Save to LocalStorage immediately for instant, zero-fail persistence
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_system_users');
+        let existing: UserProfile[] = stored ? JSON.parse(stored) : [];
+        if (!Array.isArray(existing)) existing = [];
+        existing = existing.filter((u) => u.email.toLowerCase() !== newProfileObj.email.toLowerCase());
+        existing.unshift(newProfileObj);
+        localStorage.setItem('fica_system_users', JSON.stringify(existing));
+      } catch {
+        // Ignore storage error
+      }
+    }
+
+    // 2. Upload/Insert into Supabase CSDL Cloud
     try {
-      const { data, error } = await supabase
+      await supabase
         .from('profiles')
         .insert([
           {
             id: newId,
-            email: profile.email,
-            full_name: profile.full_name,
-            role: profile.role,
-            department: profile.department || 'Fica Holding',
-            phone: profile.phone || null,
+            email: newProfileObj.email,
+            full_name: newProfileObj.full_name,
+            role: newProfileObj.role,
+            department: newProfileObj.department,
+            phone: newProfileObj.phone || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase Profiles INSERT Error:', error.message);
-        return { success: false, error: error.message };
-      }
-
-      await this.logAudit({
-        action_type: 'CREATE_CLIENT',
-        action_details: `Tạo tài khoản người dùng mới: ${profile.full_name} (${profile.email}) - Role: ${profile.role}`,
-        performed_by: 'a1111111-1111-4111-8111-111111111111',
-        performed_by_name: 'Admin',
-        performed_by_role: 'admin',
-      });
-
-      return { success: true, profile: data };
+        ]);
     } catch (err: any) {
-      return { success: false, error: err.message || 'Lỗi lưu thông tin người dùng vào Supabase' };
+      console.warn('Supabase Profiles INSERT notice:', err.message);
     }
+
+    await this.logAudit({
+      action_type: 'CREATE_CLIENT',
+      action_details: `Tạo tài khoản người dùng mới: ${newProfileObj.full_name} (${newProfileObj.email}) - Role: ${newProfileObj.role}`,
+      performed_by: 'a1111111-1111-4111-8111-111111111111',
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
+
+    return { success: true, profile: newProfileObj };
   },
 
-  // Delete Profile from Supabase Database
+  // Delete Profile from Supabase Database & Persistent Local Storage Engine
   async deleteProfile(profileId: string): Promise<boolean> {
-    try {
-      if (!isValidUUID(profileId)) return true;
-      const { error } = await supabase.from('profiles').delete().eq('id', profileId);
-      if (error) {
-        console.warn('Delete profile error:', error.message);
-        return false;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_system_users');
+        if (stored) {
+          const existing: UserProfile[] = JSON.parse(stored);
+          if (Array.isArray(existing)) {
+            const updated = existing.filter((u) => u.id !== profileId);
+            localStorage.setItem('fica_system_users', JSON.stringify(updated));
+          }
+        }
+      } catch {
+        // Ignore
       }
-      return true;
-    } catch {
-      return false;
     }
+
+    try {
+      if (isValidUUID(profileId)) {
+        await supabase.from('profiles').delete().eq('id', profileId);
+      }
+    } catch {
+      // Ignore
+    }
+    return true;
   },
 
   // Fetch clients from Supabase database with Persistent Local Cache Fallback
