@@ -256,21 +256,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setErrorMsg('');
 
     try {
-      const res = await sharepointService.createProfile({
+      await onAddUser({
         email: cleanEmail,
         full_name: cleanName,
         department: department.trim() || 'Fica Holding',
         role,
       });
-
-      if (!res.success) {
-        setErrorMsg(res.error || 'Lỗi thêm người dùng');
-        return;
-      }
-
-      if (res.profile) {
-        await onAddUser(res.profile);
-      }
 
       setEmail('');
       setFullName('');
@@ -300,7 +291,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       setLoading(true);
       try {
         await onDeleteUser(userId);
-        await sharepointService.deleteProfile(userId);
         await refreshUsers();
       } catch {
         setErrorMsg('Không thể xóa người dùng.');
