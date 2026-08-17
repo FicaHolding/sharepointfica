@@ -315,7 +315,7 @@ export const sharepointService = {
     return Array.from(map.values());
   },
 
-  // Fetch real folders from Supabase Database & Persistent Local Cache
+  // Fetch real folders from Supabase Database & Persistent Local Cache (Deduplicated 100%)
   async fetchFolders(clientId?: string): Promise<FolderItem[]> {
     let dbFolders: FolderItem[] = [];
     try {
@@ -331,9 +331,18 @@ export const sharepointService = {
       // Ignore
     }
 
+    const getKey = (f: FolderItem): string => {
+      const cleanName = f.name.trim();
+      const prefix = cleanName.substring(0, 2);
+      if (/^\d{2}$/.test(prefix)) {
+        return `prefix_${prefix}`;
+      }
+      return f.id;
+    };
+
     const map = new Map<string, FolderItem>();
     for (const f of dbFolders) {
-      map.set(f.id, f);
+      map.set(getKey(f), f);
     }
 
     if (typeof window !== 'undefined') {
@@ -344,8 +353,9 @@ export const sharepointService = {
           if (Array.isArray(localFolders)) {
             for (const lf of localFolders) {
               if (clientId ? lf.client_id === clientId : true) {
-                if (!map.has(lf.id)) {
-                  map.set(lf.id, lf);
+                const key = getKey(lf);
+                if (!map.has(key)) {
+                  map.set(key, lf);
                 }
               }
             }

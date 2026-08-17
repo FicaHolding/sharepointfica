@@ -1069,19 +1069,28 @@ function SharePointContent() {
     }
   };
 
-  // Derived subfolders for selected client (Merges standard templates with custom created & renamed subfolders)
+  // Derived subfolders for selected client (Deduplicated 100% by folder prefix/name and ID)
   const currentSubFolders = useMemo(() => {
     if (!selectedClient) return [];
     const defaults = createSubfoldersForClient(selectedClient.id);
 
+    const getFolderKey = (folder: FolderItem): string => {
+      const cleanName = folder.name.trim();
+      const prefix = cleanName.substring(0, 2);
+      if (/^\d{2}$/.test(prefix)) {
+        return `prefix_${prefix}`;
+      }
+      return `id_${folder.id}`;
+    };
+
     const map = new Map<string, FolderItem>();
     for (const d of defaults) {
-      map.set(d.id, d);
+      map.set(getFolderKey(d), d);
     }
 
     for (const c of customSubFolders) {
       if (c.client_id === selectedClient.id || !c.client_id) {
-        map.set(c.id, c);
+        map.set(getFolderKey(c), c);
       }
     }
 
