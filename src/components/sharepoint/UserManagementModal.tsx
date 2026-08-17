@@ -189,7 +189,16 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       const unsubscribe = sharepointService.subscribeRealtime(() => {
         refreshUsers();
       });
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
       return () => {
+        window.removeEventListener('keydown', handleKeyDown);
         if (unsubscribe) {
           try {
             unsubscribe();
@@ -199,7 +208,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         }
       };
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const isSuperAdmin =
     currentUserRole === 'admin' ||
@@ -418,7 +427,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in select-none">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in select-none"
+    >
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col h-[85vh]">
         {/* Modal Header */}
         <div className="p-4 bg-[#0F172A] text-white flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -434,9 +448,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-red-600 text-slate-300 hover:text-white rounded-xl transition-all text-xs font-bold flex items-center space-x-1.5 min-h-[40px] cursor-pointer"
+            title="Thoát cửa sổ (hoặc bấm phím ESC)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Đóng [ESC]</span>
           </button>
         </div>
 
@@ -936,6 +952,23 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             )}
           </div>
         )}
+
+        {/* Sticky Modal Footer for One-Click Return */}
+        <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between shrink-0 text-xs">
+          <div className="flex items-center space-x-2 text-slate-600 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="hidden sm:inline">Cấu hình Cài đặt & Phân quyền RBAC đã được tự động lưu.</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[44px] cursor-pointer"
+          >
+            <X className="w-4 h-4 text-slate-300" />
+            <span>Hoàn tất & Quay về Trang chủ</span>
+          </button>
+        </div>
       </div>
     </div>
   );

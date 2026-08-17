@@ -1616,7 +1616,12 @@ function SharePointContent() {
 
       <UserManagementModal
         isOpen={isUserManagementModalOpen}
-        onClose={() => setIsUserManagementModalOpen(false)}
+        onClose={() => {
+          setIsUserManagementModalOpen(false);
+          if (activeTab === 'settings') {
+            setActiveTab('active_clients');
+          }
+        }}
         users={systemUsers}
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}
