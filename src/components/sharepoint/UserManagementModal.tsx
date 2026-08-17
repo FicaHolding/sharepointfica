@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   UserPlus,
@@ -183,6 +183,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (isOpen) {
       refreshUsers();
@@ -192,7 +197,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          onClose();
+          onCloseRef.current?.();
         }
       };
       window.addEventListener('keydown', handleKeyDown);
@@ -208,7 +213,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         }
       };
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const isSuperAdmin =
     currentUserRole === 'admin' ||
