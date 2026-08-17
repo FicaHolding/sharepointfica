@@ -1191,7 +1191,26 @@ export const sharepointService = {
       }
     }
 
-    // 2. Fetch from Supabase Storage Cloud for Mobile devices or fresh browsers
+    // 2. Try Public URL from Supabase Storage Cloud for Mobile devices
+    try {
+      const { data: publicData } = supabase.storage
+        .from(SUPABASE_STORAGE_BUCKET)
+        .getPublicUrl('system_settings/company_logo.png');
+
+      if (publicData?.publicUrl) {
+        const res = await fetch(publicData.publicUrl, { method: 'HEAD' });
+        if (res.ok) {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fica_company_logo', publicData.publicUrl);
+          }
+          return publicData.publicUrl;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 3. Download blob from Supabase Storage Cloud for Mobile devices or fresh browsers
     try {
       const { data: blob, error } = await supabase.storage
         .from(SUPABASE_STORAGE_BUCKET)
