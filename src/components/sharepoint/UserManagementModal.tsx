@@ -12,25 +12,18 @@ import {
   AlertCircle,
   Building2,
   Trash2,
-  Edit,
   Loader2,
-  RefreshCw,
-  Upload,
   Image as ImageIcon,
-  RotateCcw,
   Check,
   Database,
-  Activity,
-  HardDrive,
-  CheckCircle,
-  Search,
-  FileText,
-  AlertTriangle,
+  Lock,
+  ShieldCheck,
+  Send,
+  Key,
 } from 'lucide-react';
-import { UserProfile, UserRole, DocumentFile } from '@/types/sharepoint';
+import { UserProfile, UserRole, DocumentFile, ClientFolder } from '@/types/sharepoint';
 import { sharepointService } from '@/services/sharepointService';
 import { FicaLogo } from '@/components/sharepoint/FicaLogo';
-import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -43,6 +36,7 @@ interface UserManagementModalProps {
   onUpdateLogo?: (newUrl: string | null) => void;
   allFiles?: DocumentFile[];
   onRefreshFiles?: () => void;
+  allClients?: ClientFolder[];
 }
 
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({
@@ -56,6 +50,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   onUpdateLogo,
   allFiles = [],
   onRefreshFiles,
+  allClients = [],
 }) => {
   const [activeSettingsTab, setActiveSettingsTab] = useState<'users' | 'logo' | 'health'>('users');
   const [dbUsers, setDbUsers] = useState<UserProfile[]>([]);
@@ -66,6 +61,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Client Assignment State
+  const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<UserProfile | null>(null);
+  const [userAssignedClientIds, setUserAssignedClientIds] = useState<string[]>([]);
+  const [savingAssignments, setSavingAssignments] = useState(false);
 
   // Logo upload state
   const [logoPreview, setLogoPreview] = useState<string | null>(companyLogoUrl || null);
@@ -120,7 +120,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setErrorMsg('');
     try {
       const profiles = await sharepointService.fetchProfiles();
-      if (Array.isArray(profiles)) {
+      if (Array.isArray(profiles) && profiles.length > 0) {
         setDbUsers(profiles);
       } else if (Array.isArray(initialUsers)) {
         setDbUsers(initialUsers);
@@ -170,15 +170,13 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         fileItem.storage_path,
         'Admin'
       );
-
       setUploadingPhantomId(null);
 
       if (res.success) {
-        alert(`Đã bổ sung thành công file vật lý cho tài liệu: ${fileItem.name}!`);
-        await handleRunPhantomAudit();
         onRefreshFiles?.();
+        handleRunPhantomAudit();
       } else {
-        alert(`Lỗi upload file vật lý: ${res.error}`);
+        alert(res.error || 'Lỗi bổ sung file vật lý!');
       }
     }
   };
@@ -186,16 +184,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       refreshUsers();
-
-      let unsubscribe: (() => void) | undefined;
-      try {
-        unsubscribe = sharepointService.subscribeRealtime(() => {
-          refreshUsers();
-        });
-      } catch (e) {
-        console.warn('Realtime subscription notice:', e);
-      }
-
+      const unsubscribe = sharepointService.subscribeRealtime(() => {
+        refreshUsers();
+      });
       return () => {
         if (unsubscribe) {
           try {
@@ -210,10 +201,31 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
   if (!isOpen) return null;
 
+  const safeUsers = dbUsers.length > 0 ? dbUsers : initialUsers;
+
+  // SMART MEMBER INVITE & VALIDATION HANDLER
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !fullName.trim()) {
-      setErrorMsg('Vui lòng nhập đầy đủ Email và Họ tên người dùng.');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = fullName.trim();
+
+    // 1. Client-side Email Format Validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setErrorMsg('Định dạng Email không hợp lệ! Vui lòng nhập địa chỉ Email công ty thật (VD: name@company.com).');
+      return;
+    }
+
+    // 2. Mandatory Full Name Validation
+    if (!cleanName) {
+      setErrorMsg('Họ và Tên thành viên là bắt buộc, không được để trống!');
+      return;
+    }
+
+    // 3. Duplicate Email Check
+    const duplicate = safeUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (duplicate) {
+      setErrorMsg(`Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${duplicate.role.toUpperCase()}]!`);
       return;
     }
 
@@ -221,31 +233,43 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setErrorMsg('');
 
     try {
-      await onAddUser({
-        email: email.trim(),
-        full_name: fullName.trim(),
+      const res = await sharepointService.createProfile({
+        email: cleanEmail,
+        full_name: cleanName,
         department: department.trim() || 'Fica Holding',
         role,
       });
+
+      if (!res.success) {
+        setErrorMsg(res.error || 'Lỗi thêm người dùng');
+        return;
+      }
 
       setEmail('');
       setFullName('');
       setShowAddForm(false);
       await refreshUsers();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi thêm người dùng');
+      setErrorMsg(err.message || 'Lỗi gửi lời mời thành viên.');
     } finally {
       setLoading(false);
     }
   };
 
+  // REMOVE USER WITH ROOT ADMIN PROTECTION
   const handleRemoveUser = async (userId: string) => {
+    const target = safeUsers.find((u) => u.id === userId);
+    if (target?.email.toLowerCase() === 'fica.holding@gmail.com') {
+      alert('Tài khoản fica.holding@gmail.com là Root Admin gốc hệ thống và không thể bị xóa!');
+      return;
+    }
+
     if (currentUserRole !== 'admin') {
       alert('Chỉ tài khoản ADMIN mới có quyền gỡ bỏ thành viên.');
       return;
     }
 
-    if (confirm('Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống RBAC?')) {
+    if (confirm(`Bạn có chắc chắn muốn xóa tài khoản ${target?.full_name} (${target?.email}) khỏi hệ thống RBAC?`)) {
       setLoading(true);
       try {
         await onDeleteUser(userId);
@@ -258,6 +282,64 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
+  // TOGGLE LOCK STATUS WITH ROOT ADMIN PROTECTION
+  const handleToggleLock = async (userId: string, currentStatus?: string) => {
+    const target = safeUsers.find((u) => u.id === userId);
+    if (target?.email.toLowerCase() === 'fica.holding@gmail.com') {
+      alert('Tài khoản fica.holding@gmail.com là Root Admin gốc hệ thống và không thể bị khóa!');
+      return;
+    }
+
+    setLoading(true);
+    await sharepointService.toggleUserLockStatus(userId, currentStatus);
+    await refreshUsers();
+    setLoading(false);
+  };
+
+  // CHANGE ROLE WITH ROOT ADMIN PROTECTION
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    const target = safeUsers.find((u) => u.id === userId);
+    if (target?.email.toLowerCase() === 'fica.holding@gmail.com') {
+      alert('Tài khoản fica.holding@gmail.com là Root Admin gốc hệ thống và không thể bị hạ quyền!');
+      return;
+    }
+
+    setLoading(true);
+    await sharepointService.updateUserRole(userId, newRole);
+    await refreshUsers();
+    setLoading(false);
+  };
+
+  // RESEND INVITE
+  const handleResendInvite = async (userEmail: string) => {
+    setLoading(true);
+    await sharepointService.resendUserInvite(userEmail);
+    setLoading(false);
+    alert(`Đã gửi lại email kích hoạt tới: ${userEmail}`);
+  };
+
+  // OPEN CLIENT ASSIGNMENT DRAWER
+  const handleOpenClientAssignment = async (user: UserProfile) => {
+    setSelectedUserForAssignment(user);
+    const assigned = await sharepointService.fetchUserClientAssignments(user.id);
+    setUserAssignedClientIds(assigned);
+  };
+
+  const handleToggleAssignClient = (clientId: string) => {
+    setUserAssignedClientIds((prev) =>
+      prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId]
+    );
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!selectedUserForAssignment) return;
+    setSavingAssignments(true);
+    await sharepointService.saveUserClientAssignments(selectedUserForAssignment.id, userAssignedClientIds);
+    setSavingAssignments(false);
+    setSelectedUserForAssignment(null);
+    alert(`Đã lưu gán phụ trách Khách hàng cho ${selectedUserForAssignment.full_name}!`);
+  };
+
   const handleLogoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (currentUserRole !== 'admin') {
       setLogoError('Chỉ tài khoản ADMIN mới có quyền thay đổi Logo Thương hiệu.');
@@ -266,8 +348,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-
-      // File Size Validation: Max 2MB
       if (file.size > 2 * 1024 * 1024) {
         const mbSize = (file.size / (1024 * 1024)).toFixed(2);
         setLogoError(`Dung lượng file logo (${mbSize} MB) vượt quá giới hạn tối đa 2MB. Vui lòng chọn file ảnh nhỏ hơn!`);
@@ -317,11 +397,20 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
-  const safeUsers = dbUsers.length > 0 ? dbUsers : initialUsers;
+  const getStatusBadge = (s?: string) => {
+    switch (s) {
+      case 'pending':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Đang chờ xác nhận</span>;
+      case 'disabled':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">Đã khóa</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Đang hoạt động</span>;
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in select-none">
-      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col h-[85vh]">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col h-[85vh]">
         {/* Modal Header */}
         <div className="p-4 bg-[#0F172A] text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center space-x-3">
@@ -330,7 +419,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm">Cài Đặt Hệ Thống & Quản Lý RBAC</h3>
-              <p className="text-[11px] text-slate-400 font-mono">Supabase Authentication & Phantom File Reconciliation</p>
+              <p className="text-[11px] text-slate-400 font-mono">Smart Member Invite & Client Scope RBAC Engine</p>
             </div>
           </div>
 
@@ -390,7 +479,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           <div className="p-5 overflow-y-auto space-y-4 flex-1">
             <div className="flex items-center justify-between">
               <div className="text-xs text-slate-600">
-                Tổng số tài khoản trong hệ thống CSDL: <strong className="text-blue-700 font-mono">{safeUsers.length}</strong>
+                Tổng số thành viên trong hệ thống: <strong className="text-blue-700 font-mono">{safeUsers.length}</strong>
               </div>
 
               {currentUserRole === 'admin' && (
@@ -399,7 +488,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-all shadow-xs min-h-[44px]"
                 >
                   <UserPlus className="w-4 h-4" />
-                  <span>{showAddForm ? 'Đóng form' : 'Thêm người dùng mới'}</span>
+                  <span>{showAddForm ? 'Đóng form' : 'Mời người dùng mới'}</span>
                 </button>
               )}
             </div>
@@ -409,7 +498,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               <form onSubmit={handleCreateUser} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 animate-fade-in text-xs">
                 <h4 className="font-bold text-slate-900 flex items-center space-x-1.5">
                   <Shield className="w-4 h-4 text-blue-600" />
-                  <span>Mời người dùng mới vào hệ thống Supabase RBAC</span>
+                  <span>Mời người dùng mới qua Email thực (Smart Member Invite)</span>
                 </h4>
 
                 {errorMsg && (
@@ -424,7 +513,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Email công ty (*)</label>
                     <input
                       type="email"
-                      placeholder="user@fica.vn"
+                      placeholder="user@company.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full p-2.5 rounded-lg border border-slate-300 font-mono focus:outline-none focus:border-blue-600 min-h-[44px]"
@@ -436,7 +525,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     <label className="block font-bold text-slate-700 mb-1">Họ và Tên (*)</label>
                     <input
                       type="text"
-                      placeholder="VD: Trần Văn Bình"
+                      placeholder="VD: Nguyễn Văn Bình"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:border-blue-600 min-h-[44px]"
@@ -484,7 +573,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     disabled={loading}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center space-x-1.5 disabled:opacity-50 min-h-[44px]"
                   >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     <span>Xác nhận thêm người dùng</span>
                   </button>
                 </div>
@@ -499,50 +588,171 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     <th className="p-3">Thành viên</th>
                     <th className="p-3">Phòng ban</th>
                     <th className="p-3">Vai trò RBAC</th>
+                    <th className="p-3">Trạng thái</th>
                     <th className="p-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-800">
-                  {safeUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3">
-                        <div className="flex items-center space-x-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center font-mono text-xs shadow-xs">
-                            {getInitials(u.full_name)}
+                  {safeUsers.map((u) => {
+                    const isRootAdmin = u.email.toLowerCase() === 'fica.holding@gmail.com';
+                    return (
+                      <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center font-mono text-xs shadow-xs">
+                              {getInitials(u.full_name)}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 flex items-center space-x-1">
+                                <span>{u.full_name}</span>
+                                {isRootAdmin && <span title="Root Admin Gốc"><ShieldCheck className="w-3.5 h-3.5 text-purple-600" /></span>}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-bold text-slate-900">{u.full_name}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3 font-medium text-slate-600">{u.department || 'Fica Holding'}</td>
-                      <td className="p-3">{getRoleBadge(u.role)}</td>
-                      <td className="p-3 text-right">
-                        {currentUserRole === 'admin' ? (
-                          <button
-                            onClick={() => handleRemoveUser(u.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-w-[36px] min-h-[36px]"
-                            title="Xóa người dùng"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="p-3 font-medium text-slate-600">{u.department || 'Fica Holding'}</td>
+                        <td className="p-3">{getRoleBadge(u.role)}</td>
+                        <td className="p-3">{getStatusBadge(u.status)}</td>
+                        <td className="p-3 text-right">
+                          {isRootAdmin ? (
+                            <div className="flex items-center justify-end space-x-1 text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-200">
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                              <span>Root Admin Gốc (Bảo vệ)</span>
+                            </div>
+                          ) : currentUserRole === 'admin' ? (
+                            <div className="flex items-center justify-end space-x-1">
+                              {/* Change Role Dropdown */}
+                              <select
+                                value={u.role}
+                                onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                                className="text-[11px] font-bold bg-slate-100 border border-slate-300 rounded px-1.5 py-1 focus:outline-none focus:border-blue-500"
+                                title="Đổi vai trò RBAC"
+                              >
+                                <option value="admin">ADMIN</option>
+                                <option value="manager">MANAGER</option>
+                                <option value="staff">STAFF</option>
+                                <option value="client">CLIENT</option>
+                              </select>
+
+                              {/* Client Assignment Button for Manager & Staff */}
+                              {(u.role === 'manager' || u.role === 'staff') && (
+                                <button
+                                  onClick={() => handleOpenClientAssignment(u)}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+                                  title="Gán Khách hàng phụ trách"
+                                >
+                                  <Building2 className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* Resend Invite */}
+                              {u.status === 'pending' && (
+                                <button
+                                  onClick={() => handleResendInvite(u.email)}
+                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+                                  title="Gửi lại email kích hoạt"
+                                >
+                                  <Mail className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* Toggle Lock / Unlock */}
+                              <button
+                                onClick={() => handleToggleLock(u.id, u.status)}
+                                className={`p-1.5 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center ${
+                                  u.status === 'disabled'
+                                    ? 'text-emerald-600 hover:bg-emerald-50'
+                                    : 'text-amber-600 hover:bg-amber-50'
+                                }`}
+                                title={u.status === 'disabled' ? 'Mở khóa tài khoản' : 'Tạm khóa tài khoản'}
+                              >
+                                {u.status === 'disabled' ? <UserCheck className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                              </button>
+
+                              {/* Delete User */}
+                              <button
+                                onClick={() => handleRemoveUser(u.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+                                title="Xóa khỏi hệ thống"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+
+            {/* Client Assignment Sub-Drawer Modal */}
+            {selectedUserForAssignment && (
+              <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl space-y-3 animate-fade-in text-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-blue-900 flex items-center space-x-1.5">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <span>Phân công Khách hàng phụ trách cho: <strong>{selectedUserForAssignment.full_name}</strong> ({selectedUserForAssignment.role.toUpperCase()})</span>
+                  </h4>
+                  <button
+                    onClick={() => setSelectedUserForAssignment(null)}
+                    className="p-1 text-slate-400 hover:text-slate-700"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-blue-800">
+                  Tích chọn các Khách hàng mà thành viên này được phép truy cập và xử lý tài liệu:
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-white rounded-lg border border-blue-200">
+                  {allClients.map((c) => {
+                    const isChecked = userAssignedClientIds.includes(c.id);
+                    return (
+                      <label key={c.id} className="flex items-center space-x-2 cursor-pointer p-1.5 hover:bg-slate-50 rounded">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleAssignClient(c.id)}
+                          className="rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="truncate font-semibold text-slate-800" title={c.folder_name}>
+                          {c.folder_name}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-1">
+                  <button
+                    onClick={() => setSelectedUserForAssignment(null)}
+                    className="px-3 py-1.5 bg-slate-200 text-slate-700 font-semibold rounded"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleSaveAssignments}
+                    disabled={savingAssignments}
+                    className="px-4 py-1.5 bg-blue-600 text-white font-bold rounded flex items-center space-x-1"
+                  >
+                    {savingAssignments ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Lưu gán Khách hàng</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Body Content Tab 2: Company Logo Upload */}
         {activeSettingsTab === 'logo' && (
           <div className="p-5 overflow-y-auto space-y-6 flex-1 text-xs text-slate-800">
-            {/* Header info */}
             <div>
               <h4 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                 <ImageIcon className="w-5 h-5 text-purple-600" />
@@ -553,7 +763,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </p>
             </div>
 
-            {/* Error Banner */}
             {logoError && (
               <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs flex items-center space-x-2 animate-fade-in">
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
@@ -561,7 +770,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
             )}
 
-            {/* RBAC Notice if Non-Admin */}
             {currentUserRole !== 'admin' && (
               <div className="p-3 bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs flex items-center space-x-2">
                 <Shield className="w-4 h-4 text-amber-700 shrink-0" />
@@ -569,9 +777,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
             )}
 
-            {/* Logo Preview Section */}
             <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6">
-              {/* Box Preview */}
               <div className="w-28 h-28 bg-[#0F172A] rounded-2xl border-2 border-slate-800 flex items-center justify-center p-3 shadow-md relative shrink-0">
                 <FicaLogo className="w-16 h-16" logoUrl={logoPreview} />
                 {logoPreview && (
@@ -581,186 +787,132 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 )}
               </div>
 
-              {/* Status info & Action Controls */}
               <div className="space-y-3 flex-1 text-center sm:text-left">
                 <div>
-                  <h5 className="font-bold text-slate-900 text-sm">
-                    {logoPreview ? 'Đang sử dụng Logo Tùy chỉnh' : 'Đang sử dụng Logo FICA mặc định'}
-                  </h5>
-                  <p className="text-slate-500 text-[11px] mt-0.5">
-                    Định dạng hỗ trợ: PNG, JPG, SVG, WebP. Dung lượng tối đa: <strong>2MB</strong>.
+                  <h5 className="font-bold text-slate-900 text-sm">Tải lên Logo tùy chỉnh mới</h5>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Định dạng hỗ trợ: PNG, JPG, WEBP, SVG (Dung lượng tối đa 2MB).
                   </p>
                 </div>
 
-                {/* Upload & Delete Action Buttons */}
-                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                  <input
-                    type="file"
-                    disabled={currentUserRole !== 'admin' || uploadingLogo}
-                    onChange={handleLogoFileSelect}
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                    className="hidden"
-                    id="logo-upload-input"
-                  />
-                  <label
-                    htmlFor="logo-upload-input"
-                    className={`px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-2 cursor-pointer min-h-[44px] ${
-                      currentUserRole !== 'admin' || uploadingLogo ? 'opacity-50 pointer-events-none' : ''
-                    }`}
-                  >
-                    {uploadingLogo ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Upload className="w-4 h-4" />
-                    )}
-                    <span>{uploadingLogo ? 'Đang tải Logo...' : 'Tải lên Logo Mới'}</span>
-                  </label>
+                {currentUserRole === 'admin' && (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                    <label className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl cursor-pointer transition-all shadow-xs flex items-center space-x-2 min-h-[44px]">
+                      {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                      <span>{uploadingLogo ? 'Đang tải...' : 'Chọn file ảnh Logo mới'}</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                        onChange={handleLogoFileSelect}
+                        disabled={uploadingLogo}
+                        className="hidden"
+                      />
+                    </label>
 
-                  {logoPreview && (
-                    <button
-                      type="button"
-                      disabled={currentUserRole !== 'admin' || uploadingLogo}
-                      onClick={handleRemoveLogo}
-                      className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 min-h-[44px] disabled:opacity-50"
-                    >
-                      <RotateCcw className="w-4 h-4 text-slate-600" />
-                      <span>Xóa Logo (Về mặc định)</span>
-                    </button>
-                  )}
-                </div>
+                    {logoPreview && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="bg-slate-200 hover:bg-red-100 text-slate-700 hover:text-red-700 font-semibold text-xs px-3 py-2.5 rounded-xl transition-all border border-slate-300 hover:border-red-300 flex items-center space-x-1.5 min-h-[44px]"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Xóa Logo (Khôi phục mặc định)</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Body Content Tab 3: Health Check & Phantom Reconciliation Audit */}
+        {/* Body Content Tab 3: Health & Phantom Audit */}
         {activeSettingsTab === 'health' && (
           <div className="p-5 overflow-y-auto space-y-5 flex-1 text-xs text-slate-800">
             <div>
               <h4 className="font-bold text-slate-900 text-sm flex items-center space-x-2">
                 <Database className="w-5 h-5 text-emerald-600" />
-                <span>Kiểm Tra Storage & Rà Soát File Phantom Toàn Hệ Thống</span>
+                <span>Kiểm Tra Storage & Rà Soát File Phantom</span>
               </h4>
               <p className="text-slate-500 text-xs mt-1">
-                Tự động quét toàn bộ tài liệu trong CSDL và đối chiếu file vật lý thực tế trên Supabase Private Storage <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-blue-700 font-bold">{SUPABASE_STORAGE_BUCKET}</code>.
+                Công cụ tự động đối soát tệp vật lý giữa CSDL Supabase Database và Supabase Storage Bucket.
               </p>
             </div>
 
-            {/* Health Card */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 shadow-xs">
+            {/* Health Status Box */}
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`p-2.5 rounded-xl ${healthStatus.exists ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-400/30' : 'bg-amber-500/10 text-amber-600 border border-amber-400/30'}`}>
-                    <HardDrive className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h5 className="font-bold text-xs text-slate-900">
-                      Bucket '{SUPABASE_STORAGE_BUCKET}' Status
-                    </h5>
-                    <p className="text-[11px] text-slate-500 font-mono">
-                      {healthStatus.exists ? 'Private Security Mode • RLS Authenticated Policies Active' : 'Đang chờ khởi tạo tự động...'}
-                    </p>
-                  </div>
+                <span className="font-bold text-slate-800">Trạng thái Supabase Storage Bucket:</span>
+                <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${healthStatus.exists ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                  {healthStatus.checking ? 'Đang kiểm tra...' : healthStatus.exists ? 'Hoạt động an toàn' : 'Cần kiểm tra'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 font-mono">{healthStatus.message}</p>
+            </div>
+
+            {/* Audit Summary Box */}
+            <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-bold text-blue-900">Báo cáo Rà soát File Phantom (Phantom File Audit)</h5>
+                  <p className="text-[11px] text-blue-700">Tổng tài liệu kiểm tra: <strong>{auditReport.total}</strong></p>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleRunHealthCheck}
-                    disabled={healthStatus.checking}
-                    className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold flex items-center space-x-1.5 transition-all text-xs min-h-[40px] disabled:opacity-50"
-                  >
-                    {healthStatus.checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    <span>Kiểm tra hạ tầng</span>
-                  </button>
+                <button
+                  onClick={handleRunPhantomAudit}
+                  disabled={auditing}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg flex items-center space-x-1.5 disabled:opacity-50 min-h-[44px]"
+                >
+                  {auditing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                  <span>{auditing ? 'Đang quét...' : 'Quét lại hệ thống'}</span>
+                </button>
+              </div>
 
-                  <button
-                    onClick={handleRunPhantomAudit}
-                    disabled={auditing}
-                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center space-x-1.5 transition-all text-xs min-h-[40px] disabled:opacity-50 shadow-xs"
-                  >
-                    {auditing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                    <span>{auditing ? 'Đang đối soát...' : '🔎 Quét File Phantom'}</span>
-                  </button>
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="p-3 bg-white border border-emerald-200 rounded-lg text-emerald-800">
+                  <div className="text-[11px] font-semibold">Tài liệu An toàn (Có File Vật lý):</div>
+                  <div className="text-lg font-extrabold mt-0.5">{auditReport.verifiedCount} file</div>
+                </div>
+
+                <div className="p-3 bg-white border border-red-200 rounded-lg text-red-800">
+                  <div className="text-[11px] font-semibold">Tài liệu Phantom (Thiếu File Vật lý):</div>
+                  <div className="text-lg font-extrabold mt-0.5">{auditReport.phantomCount} file</div>
                 </div>
               </div>
             </div>
 
-            {/* Reconciliation Audit Summary Widgets */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl">
-                <div className="text-[11px] text-blue-700 font-bold">Tổng Record CSDL</div>
-                <div className="text-lg font-extrabold text-blue-900 font-mono mt-0.5">{auditReport.total || allFiles.length}</div>
-                <div className="text-[10px] text-blue-600 mt-0.5">Tài liệu trong Database</div>
-              </div>
-
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <div className="text-[11px] text-emerald-700 font-bold">File Vật Lý Chuẩn</div>
-                <div className="text-lg font-extrabold text-emerald-900 font-mono mt-0.5">{auditReport.verifiedCount}</div>
-                <div className="text-[10px] text-emerald-600 mt-0.5">Sẵn sàng xem/tải về</div>
-              </div>
-
-              <div className={`p-3.5 rounded-xl border ${auditReport.phantomCount > 0 ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`text-[11px] font-bold ${auditReport.phantomCount > 0 ? 'text-amber-800' : 'text-slate-700'}`}>File Phantom (Cần bổ sung)</div>
-                <div className={`text-lg font-extrabold font-mono mt-0.5 ${auditReport.phantomCount > 0 ? 'text-amber-900' : 'text-slate-800'}`}>{auditReport.phantomCount}</div>
-                <div className={`text-[10px] ${auditReport.phantomCount > 0 ? 'text-amber-700 font-semibold' : 'text-slate-500'}`}>Metadata có, thiếu file gốc</div>
-              </div>
-            </div>
-
-            {/* Phantom Files Table */}
+            {/* Phantom Files List & Replace Options */}
             {auditReport.phantomFiles.length > 0 && (
-              <div className="space-y-2">
-                <h5 className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>Danh sách File Phantom Cần Bổ Sung File Vật Lý ({auditReport.phantomFiles.length} tài liệu):</span>
+              <div className="space-y-3">
+                <h5 className="font-bold text-slate-900 flex items-center space-x-1.5 text-xs">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <span>Danh sách File Phantom cần bổ sung File thực tế:</span>
                 </h5>
 
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                       <tr>
-                        <th className="p-2.5">Tên Tài liệu</th>
-                        <th className="p-2.5">Dịch vụ</th>
-                        <th className="p-2.5">Ngày khởi tạo</th>
-                        <th className="p-2.5 text-right">Thao tác bổ sung</th>
+                        <th className="p-2.5">Tên Tài Liệu</th>
+                        <th className="p-2.5">Path Storage</th>
+                        <th className="p-2.5 text-right">Bổ sung File Thực</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 text-slate-800">
+                    <tbody className="divide-y divide-slate-200">
                       {auditReport.phantomFiles.map((pf) => (
-                        <tr key={pf.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-2.5 font-bold text-slate-900">
-                            <div className="flex items-center space-x-2">
-                              <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[220px]">{pf.name}</span>
-                            </div>
-                          </td>
-                          <td className="p-2.5">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-50 text-blue-800 font-bold border border-blue-200">
-                              {pf.service_type || 'CFO'}
-                            </span>
-                          </td>
-                          <td className="p-2.5 text-slate-500 font-mono text-[11px]">
-                            {new Date(pf.created_at).toLocaleDateString('vi-VN')}
-                          </td>
+                        <tr key={pf.id} className="hover:bg-slate-50">
+                          <td className="p-2.5 font-bold text-slate-900">{pf.name}</td>
+                          <td className="p-2.5 font-mono text-[11px] text-slate-500">{pf.storage_path}</td>
                           <td className="p-2.5 text-right">
-                            <input
-                              type="file"
-                              id={`phantom-upload-${pf.id}`}
-                              className="hidden"
-                              disabled={uploadingPhantomId === pf.id}
-                              onChange={(e) => handleReplacePhantomFile(e, pf)}
-                            />
-                            <label
-                              htmlFor={`phantom-upload-${pf.id}`}
-                              className={`px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px] cursor-pointer inline-flex items-center space-x-1 min-h-[32px] ${
-                                uploadingPhantomId === pf.id ? 'opacity-50 pointer-events-none' : ''
-                              }`}
-                            >
-                              {uploadingPhantomId === pf.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Upload className="w-3.5 h-3.5" />
-                              )}
-                              <span>{uploadingPhantomId === pf.id ? 'Đang lưu...' : 'Bổ sung File'}</span>
+                            <label className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded cursor-pointer inline-flex items-center space-x-1 min-h-[36px]">
+                              {uploadingPhantomId === pf.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                              <span>{uploadingPhantomId === pf.id ? 'Đang tải...' : 'Upload File'}</span>
+                              <input
+                                type="file"
+                                onChange={(e) => handleReplacePhantomFile(e, pf)}
+                                disabled={uploadingPhantomId === pf.id}
+                                className="hidden"
+                              />
                             </label>
                           </td>
                         </tr>
@@ -772,17 +924,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             )}
           </div>
         )}
-
-        {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 text-xs">
-          <span className="text-slate-500 font-mono">Supabase Storage Private Security & Verified 2-Phase Engine</span>
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors min-h-[44px]"
-          >
-            Đóng cửa sổ
-          </button>
-        </div>
       </div>
     </div>
   );

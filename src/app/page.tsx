@@ -69,14 +69,51 @@ function SharePointContent() {
     loadCompanyLogo();
   }, []);
 
-  // Active Logged In User State (Dynamic Persistence)
-  const [currentUser, setCurrentUser] = useState<UserProfile>({
-    id: 'a1111111-1111-4111-8111-111111111111',
-    email: 'admin@fica.vn',
-    full_name: 'Quản trị viên Fica',
-    role: 'admin',
-    department: 'Ban Giám Đốc Fica Holding',
+  // Active Logged In User State (Dynamic Root Admin & Member Persistence)
+  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
+    if (typeof window !== 'undefined') {
+      const activeEmail = localStorage.getItem('fica_current_user_email');
+      if (activeEmail && activeEmail.toLowerCase() !== 'fica.holding@gmail.com') {
+        const storedUsers = localStorage.getItem('fica_system_users');
+        if (storedUsers) {
+          try {
+            const list: UserProfile[] = JSON.parse(storedUsers);
+            const found = list.find((u) => u.email.toLowerCase() === activeEmail.toLowerCase());
+            if (found) return found;
+          } catch {
+            // Ignore
+          }
+        }
+        return {
+          id: crypto.randomUUID(),
+          email: activeEmail,
+          full_name: activeEmail.split('@')[0],
+          role: 'staff',
+          department: 'Fica Holding',
+        };
+      }
+    }
+    return {
+      id: 'a0000000-0000-4000-8000-000000000000',
+      email: 'fica.holding@gmail.com',
+      full_name: 'Super Admin Fica Holding',
+      role: 'admin',
+      department: 'Hội Đồng Quản Trị',
+    };
   });
+
+  // User Client Assignments State for Manager/Staff RBAC Scoping
+  const [assignedClientIds, setAssignedClientIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadAssignedClients() {
+      if (currentUser.role !== 'admin') {
+        const ids = await sharepointService.fetchUserClientAssignments(currentUser.id);
+        setAssignedClientIds(ids);
+      }
+    }
+    loadAssignedClients();
+  }, [currentUser]);
 
   // User Management State (Loaded Dynamically from Supabase `profiles`)
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
@@ -1100,9 +1137,14 @@ function SharePointContent() {
   const activeClientsList = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
   const archivedClientsList = useMemo(() => clients.filter((c) => c.status === 'archived'), [clients]);
 
-  // FILTERED CLIENTS LIST BY SEARCH QUERY & SERVICE TYPE FILTER ('all' | 'Audit' | 'CFO' | 'Consulting' | 'Tax')
+  // FILTERED CLIENTS LIST BY SEARCH QUERY & SERVICE TYPE FILTER ('all' | 'Audit' | 'CFO' | 'Consulting' | 'Tax') & RBAC SCOPING
   const displayedClients = useMemo(() => {
     let list = activeTab === 'archived_clients' ? archivedClientsList : activeClientsList;
+
+    // RBAC Scoping for Manager and Staff: filter by assigned client IDs
+    if (currentUser.role !== 'admin' && assignedClientIds.length > 0) {
+      list = list.filter((c) => assignedClientIds.includes(c.id));
+    }
 
     if (filterState.serviceType && filterState.serviceType !== 'all') {
       list = list.filter((c) => (c.service_type || 'CFO') === filterState.serviceType);
@@ -1590,6 +1632,7 @@ function SharePointContent() {
         }}
         allFiles={files}
         onRefreshFiles={() => router.refresh()}
+        allClients={clients}
       />
 
       <NewClientModal

@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/client';
-import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile } from '@/types/sharepoint';
+import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile, UserRole } from '@/types/sharepoint';
 import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 
 const supabase = createClient();
@@ -181,7 +181,7 @@ export const sharepointService = {
     }
   },
 
-  // Fetch profiles from Supabase database with Persistent Local Cache Fallback & Deduplication
+  // Fetch profiles from Supabase database with Persistent Local Cache Fallback, Root Admin Protection & Deduplication
   async fetchProfiles(): Promise<UserProfile[]> {
     let dbProfiles: UserProfile[] = [];
     try {
@@ -198,6 +198,8 @@ export const sharepointService = {
           role: p.role || 'staff',
           department: p.department || 'Fica Holding',
           phone: p.phone || undefined,
+          status: p.status || 'active',
+          invited_at: p.invited_at || p.created_at,
         }));
       }
     } catch (err: any) {
@@ -205,9 +207,32 @@ export const sharepointService = {
     }
 
     const map = new Map<string, UserProfile>();
+
+    // 1. Ensure Root Admin account fica.holding@gmail.com ALWAYS exists with FULL ADMIN privileges
+    const rootAdminId = 'a0000000-0000-4000-8000-000000000000';
+    const rootAdminProfile: UserProfile = {
+      id: rootAdminId,
+      email: 'fica.holding@gmail.com',
+      full_name: 'Super Admin Fica Holding',
+      role: 'admin',
+      department: 'Hội Đồng Quản Trị',
+      status: 'active',
+      invited_at: new Date().toISOString(),
+    };
+    map.set(rootAdminId, rootAdminProfile);
+    map.set('fica.holding@gmail.com', rootAdminProfile);
+
     for (const p of dbProfiles) {
-      map.set(p.id, p);
-      if (p.email) map.set(p.email.toLowerCase(), p);
+      // Filter out demo test emails
+      if (['admin@example.com', 'admin@fica.vn', 'manager@fica.vn', 'staff@fica.vn', 'client@fica.vn'].includes(p.email.toLowerCase())) {
+        continue;
+      }
+      if (p.email.toLowerCase() === 'fica.holding@gmail.com') {
+        map.set(rootAdminId, { ...rootAdminProfile, ...p, role: 'admin', status: 'active' });
+      } else {
+        map.set(p.id, p);
+        if (p.email) map.set(p.email.toLowerCase(), p);
+      }
     }
 
     if (typeof window !== 'undefined') {
@@ -218,6 +243,11 @@ export const sharepointService = {
           if (Array.isArray(localProfiles)) {
             for (const lp of localProfiles) {
               const emailKey = lp.email.toLowerCase();
+              if (['admin@example.com', 'admin@fica.vn', 'manager@fica.vn', 'staff@fica.vn', 'client@fica.vn'].includes(emailKey)) {
+                continue;
+              }
+              if (emailKey === 'fica.holding@gmail.com') continue;
+
               if (!map.has(lp.id) && !map.has(emailKey)) {
                 map.set(lp.id, lp);
                 map.set(emailKey, lp);
@@ -239,16 +269,35 @@ export const sharepointService = {
     return Array.from(uniqueMap.values());
   },
 
-  // Create Profile in Supabase Database & Persistent Local Storage Engine
+  // Smart Member Invite & Profile Creation in Supabase Database & Persistent Local Storage Engine
   async createProfile(profile: Omit<UserProfile, 'id'>): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
+    const cleanEmail = profile.email.trim().toLowerCase();
+    const cleanName = (profile as any).fullName ? (profile as any).fullName.trim() : profile.full_name?.trim() || '';
+
+    // Protection Check
+    if (cleanEmail === 'fica.holding@gmail.com') {
+      return { success: false, error: 'Email fica.holding@gmail.com là tài khoản Admin gốc hệ thống và đã tồn tại!' };
+    }
+
+    const existingUsers = await this.fetchProfiles();
+    const duplicate = existingUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (duplicate) {
+      return {
+        success: false,
+        error: `Email "${cleanEmail}" đã là thành viên trong hệ thống với vai trò [${duplicate.role.toUpperCase()}]!`,
+      };
+    }
+
     const newId = crypto.randomUUID();
     const newProfileObj: UserProfile = {
       id: newId,
-      email: profile.email.trim(),
-      full_name: profile.full_name.trim(),
+      email: cleanEmail,
+      full_name: cleanName,
       role: profile.role,
       department: profile.department?.trim() || 'Fica Holding',
       phone: profile.phone?.trim() || undefined,
+      status: 'pending', // Smart Invite Pending Activation
+      invited_at: new Date().toISOString(),
     };
 
     // 1. Save to LocalStorage immediately for instant, zero-fail persistence
@@ -265,7 +314,13 @@ export const sharepointService = {
       }
     }
 
-    // 2. Upload/Insert into Supabase CSDL Cloud
+    // 2. Trigger Supabase Auth Invite or CSDL Cloud insert
+    try {
+      await supabase.auth.admin?.inviteUserByEmail?.(cleanEmail);
+    } catch {
+      // Ignore
+    }
+
     try {
       await supabase
         .from('profiles')
@@ -277,6 +332,8 @@ export const sharepointService = {
             role: newProfileObj.role,
             department: newProfileObj.department,
             phone: newProfileObj.phone || null,
+            status: 'pending',
+            invited_at: newProfileObj.invited_at,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           },
@@ -287,8 +344,8 @@ export const sharepointService = {
 
     await this.logAudit({
       action_type: 'CREATE_CLIENT',
-      action_details: `Tạo tài khoản người dùng mới: ${newProfileObj.full_name} (${newProfileObj.email}) - Role: ${newProfileObj.role}`,
-      performed_by: 'a1111111-1111-4111-8111-111111111111',
+      action_details: `Gửi lời mời tham gia hệ thống cho email: ${newProfileObj.email} (Họ tên: ${newProfileObj.full_name}, Vai trò: ${newProfileObj.role})`,
+      performed_by: 'a0000000-0000-4000-8000-000000000000',
       performed_by_name: 'Admin',
       performed_by_role: 'admin',
     });
@@ -296,8 +353,125 @@ export const sharepointService = {
     return { success: true, profile: newProfileObj };
   },
 
-  // Delete Profile from Supabase Database & Persistent Local Storage Engine
+  // Resend Invite to Member
+  async resendUserInvite(email: string): Promise<boolean> {
+    try {
+      await supabase.auth.admin?.inviteUserByEmail?.(email.trim().toLowerCase());
+    } catch {
+      // Ignore
+    }
+    await this.logAudit({
+      action_type: 'UPDATE_METADATA',
+      action_details: `Gửi lại email kích hoạt cho tài khoản ${email}`,
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
+    return true;
+  },
+
+  // Toggle User Lock/Unlock Status with Root Admin Protection
+  async toggleUserLockStatus(userId: string, currentStatus?: string): Promise<boolean> {
+    const safeProfiles = await this.fetchProfiles();
+    const target = safeProfiles.find((u) => u.id === userId);
+    if (!target) return false;
+
+    // PROTECTION RULE: fica.holding@gmail.com CAN NEVER BE LOCKED!
+    if (target.email.toLowerCase() === 'fica.holding@gmail.com') {
+      console.warn('PROTECTION RULE: Root Admin fica.holding@gmail.com cannot be locked!');
+      return false;
+    }
+
+    const nextStatus = currentStatus === 'disabled' || target.status === 'disabled' ? 'active' : 'disabled';
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_system_users');
+        if (stored) {
+          let existing: UserProfile[] = JSON.parse(stored);
+          if (Array.isArray(existing)) {
+            existing = existing.map((u) => (u.id === userId ? { ...u, status: nextStatus } : u));
+            localStorage.setItem('fica_system_users', JSON.stringify(existing));
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    try {
+      if (isValidUUID(userId)) {
+        await supabase.from('profiles').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', userId);
+      }
+    } catch {
+      // Ignore
+    }
+
+    await this.logAudit({
+      action_type: 'UPDATE_METADATA',
+      action_details: `Đã ${nextStatus === 'disabled' ? 'khóa' : 'mở khóa'} tài khoản người dùng ${target.full_name} (${target.email})`,
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
+
+    return true;
+  },
+
+  // Update User Role with Root Admin Protection
+  async updateUserRole(userId: string, newRole: UserRole): Promise<boolean> {
+    const safeProfiles = await this.fetchProfiles();
+    const target = safeProfiles.find((u) => u.id === userId);
+    if (!target) return false;
+
+    // PROTECTION RULE: fica.holding@gmail.com CAN NEVER BE DEMOTED!
+    if (target.email.toLowerCase() === 'fica.holding@gmail.com') {
+      console.warn('PROTECTION RULE: Root Admin fica.holding@gmail.com cannot be demoted!');
+      return false;
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_system_users');
+        if (stored) {
+          let existing: UserProfile[] = JSON.parse(stored);
+          if (Array.isArray(existing)) {
+            existing = existing.map((u) => (u.id === userId ? { ...u, role: newRole } : u));
+            localStorage.setItem('fica_system_users', JSON.stringify(existing));
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    try {
+      if (isValidUUID(userId)) {
+        await supabase.from('profiles').update({ role: newRole, updated_at: new Date().toISOString() }).eq('id', userId);
+      }
+    } catch {
+      // Ignore
+    }
+
+    await this.logAudit({
+      action_type: 'UPDATE_METADATA',
+      action_details: `Cập nhật vai trò RBAC cho ${target.email} thành [${newRole.toUpperCase()}]`,
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
+
+    return true;
+  },
+
+  // Delete Profile with Root Admin Protection
   async deleteProfile(profileId: string): Promise<boolean> {
+    const safeProfiles = await this.fetchProfiles();
+    const target = safeProfiles.find((u) => u.id === profileId);
+
+    // PROTECTION RULE: fica.holding@gmail.com CAN NEVER BE DELETED!
+    if (target?.email.toLowerCase() === 'fica.holding@gmail.com') {
+      console.warn('PROTECTION RULE: Root Admin fica.holding@gmail.com cannot be deleted!');
+      return false;
+    }
+
     if (typeof window !== 'undefined') {
       try {
         const stored = localStorage.getItem('fica_system_users');
@@ -320,6 +494,69 @@ export const sharepointService = {
     } catch {
       // Ignore
     }
+    return true;
+  },
+
+  // Fetch Client Assignments for User (Manager & Staff RBAC Scoping)
+  async fetchUserClientAssignments(userId: string): Promise<string[]> {
+    let assignedIds: string[] = [];
+    try {
+      const { data, error } = await supabase
+        .from('user_client_assignments')
+        .select('client_id')
+        .eq('user_id', userId);
+
+      if (!error && data && Array.isArray(data)) {
+        assignedIds = data.map((row: any) => row.client_id);
+      }
+    } catch {
+      // Ignore
+    }
+
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`fica_assignments_${userId}`);
+      if (stored) {
+        try {
+          const localAssigned: string[] = JSON.parse(stored);
+          if (Array.isArray(localAssigned)) {
+            assignedIds = Array.from(new Set([...assignedIds, ...localAssigned]));
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    return assignedIds;
+  },
+
+  // Save Client Assignments for User
+  async saveUserClientAssignments(userId: string, clientIds: string[]): Promise<boolean> {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`fica_assignments_${userId}`, JSON.stringify(clientIds));
+      } catch {
+        // Ignore
+      }
+    }
+
+    try {
+      if (isValidUUID(userId)) {
+        await supabase.from('user_client_assignments').delete().eq('user_id', userId);
+        if (clientIds.length > 0) {
+          const rows = clientIds.map((cid) => ({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            client_id: cid,
+            assigned_at: new Date().toISOString(),
+          }));
+          await supabase.from('user_client_assignments').insert(rows);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
     return true;
   },
 

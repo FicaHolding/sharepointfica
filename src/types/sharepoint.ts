@@ -8,6 +8,8 @@ export interface UserProfile {
   department?: string;
   phone?: string;
   avatar_url?: string;
+  status?: 'pending' | 'active' | 'disabled';
+  invited_at?: string;
 }
 
 export type ClientStatus = 'active' | 'archived';
