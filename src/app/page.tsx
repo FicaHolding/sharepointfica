@@ -130,51 +130,9 @@ function SharePointContent() {
     }, 4500);
   };
 
-  // CLIENTS DATA (Loaded dynamically from Supabase `clients`)
-  const [clients, setClients] = useState<ClientFolder[]>([
-    {
-      id: 'c1111111-1111-4111-8111-111111111111',
-      code: 'KH001',
-      name: 'Tập đoàn SunGroup',
-      folder_name: '[KH001] - Tập đoàn SunGroup',
-      status: 'active',
-      service_type: 'CFO',
-      created_at: '2026-01-15T08:30:00Z',
-      updated_at: '2026-08-10T14:20:00Z',
-      created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Quản trị viên Fica',
-      total_files_count: 4,
-      total_size_mb: 24.5,
-    },
-    {
-      id: 'c2222222-2222-4222-8222-222222222222',
-      code: 'KH002',
-      name: 'Tập đoàn Vingroup',
-      folder_name: '[KH002] - Tập đoàn Vingroup',
-      status: 'active',
-      service_type: 'CFO',
-      created_at: '2026-02-01T09:00:00Z',
-      updated_at: '2026-08-12T11:15:00Z',
-      created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Quản trị viên Fica',
-      total_files_count: 4,
-      total_size_mb: 48.2,
-    },
-    {
-      id: 'c3333333-3333-4333-8333-333333333333',
-      code: 'KH003',
-      name: 'Tập đoàn Hòa Phát (Archive)',
-      folder_name: '[KH003] - Tập đoàn Hòa Phát',
-      status: 'archived',
-      service_type: 'Audit',
-      created_at: '2025-05-10T10:00:00Z',
-      updated_at: '2026-06-30T16:00:00Z',
-      created_by: 'a2222222-2222-4222-8222-222222222222',
-      created_by_name: 'Trưởng phòng Fica',
-      total_files_count: 4,
-      total_size_mb: 112.0,
-    },
-  ]);
+  // CLIENTS DATA (Loaded dynamically from Supabase `clients` DB)
+  const [clients, setClients] = useState<ClientFolder[]>([]);
+  const [isInitialDataLoading, setIsInitialDataLoading] = useState(true);
 
   // Main UI Navigation state
   const [activeTab, setActiveTab] = useState<ActiveNavTab>('active_clients');
@@ -421,6 +379,8 @@ function SharePointContent() {
         }
       } catch {
         // Keep initial clients fallback
+      } finally {
+        setIsInitialDataLoading(false);
       }
     }
 
@@ -478,65 +438,7 @@ function SharePointContent() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   // DYNAMIC FILE PERSISTENCE (Supabase DB + LocalStorage Fallback)
-  const [files, setFiles] = useState<DocumentFile[]>([
-    {
-      id: 'f1111111-1111-4111-8111-111111111111',
-      client_id: 'c1111111-1111-4111-8111-111111111111',
-      folder_id: 'sf111111-1111-4111-8111-c11111110000',
-      name: 'Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
-      current_version: 2,
-      file_size: 4250100,
-      mime_type: 'application/pdf',
-      storage_path: 'c1111111-1111-4111-8111-111111111111/Hop_Dong_Tu_Van_CFO_2025_Signed.pdf',
-      status: 'Approved',
-      fiscal_year: 2025,
-      service_type: 'CFO',
-      tags: ['Hợp đồng', 'Pháp lý', 'CFO'],
-      created_at: '2026-01-20T10:00:00Z',
-      updated_at: '2026-08-01T15:30:00Z',
-      created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Quản trị viên Fica',
-      modified_by_name: 'Quản trị viên Fica',
-    },
-    {
-      id: 'f2222222-2222-4222-8222-222222222222',
-      client_id: 'c1111111-1111-4111-8111-111111111111',
-      folder_id: 'sf222222-2222-4222-8222-c11111110000',
-      name: 'Bao_Cao_Tai_Chinh_Kiem_Toan_2024.xlsx',
-      current_version: 1,
-      file_size: 8900400,
-      mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      storage_path: 'c1111111-1111-4111-8111-111111111111/Bao_Cao_Tai_Chinh_Kiem_Toan_2024.xlsx',
-      status: 'Approved',
-      fiscal_year: 2024,
-      service_type: 'Audit',
-      tags: ['Báo cáo tài chính', 'Kiểm toán'],
-      created_at: '2026-03-12T09:15:00Z',
-      updated_at: '2026-03-12T09:15:00Z',
-      created_by: 'a1111111-1111-4111-8111-111111111111',
-      created_by_name: 'Quản trị viên Fica',
-      modified_by_name: 'Quản trị viên Fica',
-    },
-    {
-      id: 'f3333333-3333-4333-8333-333333333333',
-      client_id: 'c2222222-2222-4222-8222-222222222222',
-      folder_id: 'sf333333-3333-4333-8333-c22222220000',
-      name: 'Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
-      current_version: 3,
-      file_size: 6100200,
-      mime_type: 'application/pdf',
-      storage_path: 'c2222222-2222-4222-8222-222222222222/Tiet_Kiem_Chi_Phi_Du_An_Consulting_Vingroup.pdf',
-      status: 'Pending',
-      fiscal_year: 2025,
-      service_type: 'Consulting',
-      tags: ['Dự án CFO', 'Kiểm toán'],
-      created_at: '2026-06-01T14:00:00Z',
-      updated_at: '2026-08-11T16:45:00Z',
-      created_by: 'a3333333-3333-4333-8333-333333333333',
-      created_by_name: 'Chuyên viên Fica',
-      modified_by_name: 'Quản trị viên Fica',
-    },
-  ]);
+  const [files, setFiles] = useState<DocumentFile[]>([]);
 
   // Load files from both Supabase DB and LocalStorage on Mount / Selection Change
   useEffect(() => {
@@ -1408,6 +1310,21 @@ function SharePointContent() {
             {/* MAIN VIEWS & AUDIT STREAM */}
             {activeTab === 'reports' ? (
               <AuditLogTab logs={auditLogs} />
+            ) : isInitialDataLoading && displayedClients.length === 0 ? (
+              <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-pulse">
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <div key={n} className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 h-36 flex flex-col justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-slate-700 rounded-xl shrink-0" />
+                      <div className="space-y-2 flex-1">
+                        <div className="h-4 bg-slate-700 rounded w-3/4" />
+                        <div className="h-3 bg-slate-700/60 rounded w-1/2" />
+                      </div>
+                    </div>
+                    <div className="h-3 bg-slate-700/40 rounded w-full" />
+                  </div>
+                ))}
+              </div>
             ) : viewMode === 'list' ? (
               <DocumentListView
                 clients={displayedClients}
