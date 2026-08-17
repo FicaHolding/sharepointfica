@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/client';
 import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile, UserRole } from '@/types/sharepoint';
 import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
+import { realtimeManager } from '@/lib/realtimeManager';
 
 const supabase = createClient();
 
@@ -1704,61 +1705,8 @@ export const sharepointService = {
     }
   },
 
-  // Subscribe to Supabase Realtime changes with Safe Error Boundary Guard
-  subscribeRealtime(onTableChange: () => void, channelTag: string = 'app') {
-    try {
-      if (typeof window === 'undefined') return () => {};
-
-      const uniqueChannelName = `rt-${channelTag}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      const channel = supabase
-        .channel(uniqueChannelName)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'profiles' },
-          () => { try { onTableChange(); } catch {} }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'clients' },
-          () => { try { onTableChange(); } catch {} }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'folders' },
-          () => { try { onTableChange(); } catch {} }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'documents' },
-          () => { try { onTableChange(); } catch {} }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'files' },
-          () => { try { onTableChange(); } catch {} }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'audit_logs' },
-          () => { try { onTableChange(); } catch {} }
-        );
-
-      channel.subscribe((status: any, err: any) => {
-        if (err) {
-          console.warn('Realtime status notice:', status, err);
-        }
-      });
-
-      return () => {
-        try {
-          supabase.removeChannel(channel);
-        } catch {
-          // Ignore channel cleanup exception
-        }
-      };
-    } catch (err: any) {
-      console.warn('Realtime subscription notice:', err?.message);
-      return () => {};
-    }
+  // Delegate Realtime subscriptions to Singleton RealtimeManager Engine
+  subscribeRealtime(onTableChange: () => void) {
+    return realtimeManager.subscribe(onTableChange);
   },
 };
