@@ -1534,7 +1534,10 @@ function SharePointContent() {
         userRole={currentUser.role}
       />
 
-      <SettingsErrorBoundary onClose={() => setIsUserManagementModalOpen(false)}>
+      <SettingsErrorBoundary
+        key={isUserManagementModalOpen ? 'settings-open' : 'settings-closed'}
+        onClose={() => setIsUserManagementModalOpen(false)}
+      >
         <UserManagementModal
           isOpen={isUserManagementModalOpen}
           onClose={() => {

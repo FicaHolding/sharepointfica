@@ -27,6 +27,12 @@ export class SettingsErrorBoundary extends Component<Props, State> {
     console.error('SettingsErrorBoundary caught an isolated settings error:', error, errorInfo);
   }
 
+  public componentDidUpdate(prevProps: Props) {
+    if (prevProps.children !== this.props.children && this.state.hasError) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+
   public render() {
     if (this.state.hasError) {
       return (
