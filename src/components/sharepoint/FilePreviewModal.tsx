@@ -38,6 +38,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [viewEngine, setViewEngine] = useState<'office' | 'google' | 'native'>('office');
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setExcelHtml(null);
       setRenderSuccess(false);
       setFileUrl(null);
+      setViewEngine('office');
 
       if (!file.storage_path) {
         setLoading(false);
@@ -121,6 +123,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isSpreadsheet = Boolean(file?.name.match(/\.(xlsx|xls|csv)$/i) || (file?.mime_type && (file.mime_type.includes('spreadsheet') || file.mime_type.includes('excel'))));
   const isVideo = Boolean(file?.name.match(/\.(mp4|webm|mov|m4v|mkv)$/i) || (file?.mime_type && file.mime_type.includes('video')));
   const isAudio = Boolean(file?.name.match(/\.(mp3|wav|m4a|ogg)$/i) || (file?.mime_type && file.mime_type.includes('audio')));
+
+  const officeViewerUrl = fileUrl && fileUrl.startsWith('http') ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}` : null;
+  const googleViewerUrl = fileUrl && fileUrl.startsWith('http') ? `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true` : null;
 
   // Native DOCX & XLSX Render Engine
   useEffect(() => {
@@ -324,32 +329,70 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           </div>
 
-          {/* Middle: Zoom Controls for Images/Docs */}
-          <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-            <button
-              onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Thu nhỏ"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-mono font-semibold px-2 text-slate-300">{zoomLevel}%</span>
-            <button
-              onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Phóng to"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <div className="h-4 w-[1px] bg-slate-800 mx-1" />
-            <button
-              onClick={() => setRotation((r) => (r + 90) % 360)}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Xoay 90 độ"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Middle: Engine Selector for Word/Excel or Zoom Controls */}
+          {(isDoc || isSpreadsheet) ? (
+            <div className="hidden sm:flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-sans">
+              <button
+                onClick={() => setViewEngine('office')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                  viewEngine === 'office'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+                title="Xem chuẩn Microsoft Word / Excel trên Web (Không cần tải file)"
+              >
+                <span>🏢 MS Office Web (Mặc định)</span>
+              </button>
+              <button
+                onClick={() => setViewEngine('google')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                  viewEngine === 'google'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+                title="Xem bằng Trình xem Google Docs (Không cần tải file)"
+              >
+                <span>🌐 Google Docs</span>
+              </button>
+              <button
+                onClick={() => setViewEngine('native')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                  viewEngine === 'native'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+                title="Xem nhanh bản văn bản rút gọn"
+              >
+                <span>📄 Xem Nhanh</span>
+              </button>
+            </div>
+          ) : (
+            <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <button
+                onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Thu nhỏ"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-mono font-semibold px-2 text-slate-300">{zoomLevel}%</span>
+              <button
+                onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Phóng to"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <div className="h-4 w-[1px] bg-slate-800 mx-1" />
+              <button
+                onClick={() => setRotation((r) => (r + 90) % 360)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Xoay 90 độ"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Right: Native App Launcher & Download & Close */}
           <div className="flex items-center space-x-2 shrink-0">
@@ -475,6 +518,20 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               </div>
               <audio controls src={fileUrl} className="w-full rounded-lg" />
             </div>
+          ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'office' && officeViewerUrl ? (
+            /* Official Microsoft Office Web Viewer (0 Download Required, 100% Perfect Word/Excel Formatting) */
+            <iframe
+              src={officeViewerUrl}
+              className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
+              title={file.name}
+            />
+          ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'google' && googleViewerUrl ? (
+            /* Official Google Docs Web Viewer (0 Download Required) */
+            <iframe
+              src={googleViewerUrl}
+              className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
+              title={file.name}
+            />
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
             <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
