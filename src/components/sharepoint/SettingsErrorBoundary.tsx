@@ -20,6 +20,10 @@ export class SettingsErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    if (error?.message && error.message.toLowerCase().includes('postgres_changes')) {
+      console.warn('Suppressed background Supabase Realtime notice:', error.message);
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
