@@ -43,6 +43,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [httpCloudUrl, setHttpCloudUrl] = useState<string | null>(null);
+
   // Native Content Render States (.docx, .xlsx)
   const [renderingDoc, setRenderingDoc] = useState(false);
   const [fallbackHtml, setFallbackHtml] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setExcelHtml(null);
       setRenderSuccess(false);
       setFileUrl(null);
+      setHttpCloudUrl(null);
       setViewEngine('office');
 
       if (!file.storage_path) {
@@ -74,6 +77,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         // Retrieve Signed URL / Local Blob / Data URL
         const res = await sharepointService.getFilePreviewOrDownloadUrl(file.storage_path);
         const targetUrl = res.url || res.httpSignedUrl;
+
+        if (res.httpSignedUrl && res.httpSignedUrl.startsWith('http')) {
+          setHttpCloudUrl(res.httpSignedUrl);
+        }
 
         if (targetUrl) {
           // 1. Data URLs & Blob URLs are 100% verified local/cached content
@@ -146,8 +153,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isVideo = Boolean(file?.name.match(/\.(mp4|webm|mov|m4v|mkv)$/i) || (file?.mime_type && file.mime_type.includes('video')));
   const isAudio = Boolean(file?.name.match(/\.(mp3|wav|m4a|ogg)$/i) || (file?.mime_type && file.mime_type.includes('audio')));
 
-  const officeViewerUrl = fileUrl && fileUrl.startsWith('http') ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}` : null;
-  const googleViewerUrl = fileUrl && fileUrl.startsWith('http') ? `https://docs.google.com/viewer?url=${encodeURIComponent(fileUrl)}&embedded=true` : null;
+  const activeHttpUrl = (httpCloudUrl && httpCloudUrl.startsWith('http')) ? httpCloudUrl : (fileUrl && fileUrl.startsWith('http') ? fileUrl : null);
+  const officeViewerUrl = activeHttpUrl ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(activeHttpUrl)}` : null;
+  const googleViewerUrl = activeHttpUrl ? `https://docs.google.com/viewer?url=${encodeURIComponent(activeHttpUrl)}&embedded=true` : null;
 
   // Native DOCX & XLSX Render Engine
   useEffect(() => {

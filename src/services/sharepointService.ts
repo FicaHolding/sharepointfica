@@ -1482,18 +1482,31 @@ export const sharepointService = {
 
       const cleanPath = storagePath.replace(/^\/+/, '');
 
+      // Helper to generate real Supabase Storage Public HTTP URL for external Office/Google Viewers
+      let publicCloudUrl: string | null = null;
+      try {
+        const { data: publicData } = supabase.storage
+          .from(SUPABASE_STORAGE_BUCKET)
+          .getPublicUrl(cleanPath);
+        if (publicData?.publicUrl) {
+          publicCloudUrl = publicData.publicUrl;
+        }
+      } catch {
+        // Ignore
+      }
+
       // Check memory cache for instant local display
       if (memoryFileCache.has(cleanPath)) {
         return {
           url: memoryFileCache.get(cleanPath)!,
-          httpSignedUrl: memoryFileCache.get(cleanPath)!,
+          httpSignedUrl: publicCloudUrl || memoryFileCache.get(cleanPath)!,
           isSigned: false,
         };
       }
       if (memoryFileCache.has(storagePath)) {
         return {
           url: memoryFileCache.get(storagePath)!,
-          httpSignedUrl: memoryFileCache.get(storagePath)!,
+          httpSignedUrl: publicCloudUrl || memoryFileCache.get(storagePath)!,
           isSigned: false,
         };
       }
@@ -1506,7 +1519,7 @@ export const sharepointService = {
         memoryFileCache.set(storagePath, idbUrl);
         return {
           url: idbUrl,
-          httpSignedUrl: idbUrl,
+          httpSignedUrl: publicCloudUrl || idbUrl,
           isSigned: false,
         };
       }
@@ -1517,7 +1530,7 @@ export const sharepointService = {
         if (cached) {
           return {
             url: cached,
-            httpSignedUrl: cached,
+            httpSignedUrl: publicCloudUrl || cached,
             isSigned: false,
           };
         }
