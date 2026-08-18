@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Home, Users, Archive, BarChart3, Settings, Filter, HardDrive, Sparkles, FolderKanban, X, SlidersHorizontal } from 'lucide-react';
-import { MetadataFilterState } from '@/types/sharepoint';
+import { MetadataFilterState, UserRole } from '@/types/sharepoint';
 
 export type ActiveNavTab = 'home' | 'active_clients' | 'archived_clients' | 'reports' | 'settings';
 
@@ -16,6 +16,7 @@ interface SidebarProps {
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   onOpenFilterDrawer?: () => void;
+  userRole?: UserRole;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
   onOpenFilterDrawer,
+  userRole = 'admin',
 }) => {
   const sidebarContent = (
     <div className="flex flex-col justify-between h-full select-none">
@@ -119,22 +121,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </button>
 
-            <button
-              onClick={() => {
-                onTabChange('settings');
-                onCloseMobile?.();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 text-xs rounded-lg transition-all font-medium min-h-[44px] ${
-                activeTab === 'settings'
-                  ? 'bg-blue-600/20 text-blue-400 font-semibold border-l-4 border-blue-500 pl-2'
-                  : 'hover:bg-slate-800/80 text-slate-300 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <Settings className="w-4 h-4 text-slate-400" />
-                <span>Cài đặt hệ thống</span>
-              </div>
-            </button>
+            {(userRole === 'admin' || userRole === 'manager') && (
+              <button
+                onClick={() => {
+                  onTabChange('settings');
+                  onCloseMobile?.();
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs rounded-lg transition-all font-medium min-h-[44px] ${
+                  activeTab === 'settings'
+                    ? 'bg-blue-600/20 text-blue-400 font-semibold border-l-4 border-blue-500 pl-2'
+                    : 'hover:bg-slate-800/80 text-slate-300 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Cài đặt hệ thống</span>
+                </div>
+              </button>
+            )}
           </nav>
         </div>
 

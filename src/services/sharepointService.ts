@@ -452,6 +452,59 @@ export const sharepointService = {
     return true;
   },
 
+  // Activate Pending User Directly (1-Click Admin & Bell Notification Activation)
+  async activateUserDirectly(userId: string): Promise<boolean> {
+    const safeProfiles = await this.fetchProfiles();
+    const target = safeProfiles.find((u) => u.id === userId || u.email.toLowerCase() === userId.toLowerCase());
+
+    const targetId = target?.id || userId;
+    const targetName = target?.full_name || target?.email || 'Thành viên';
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fica_system_users');
+        if (stored) {
+          let existing: UserProfile[] = JSON.parse(stored);
+          if (Array.isArray(existing)) {
+            existing = existing.map((u) =>
+              u.id === targetId || u.email.toLowerCase() === targetId.toLowerCase()
+                ? { ...u, status: 'active' }
+                : u
+            );
+            localStorage.setItem('fica_system_users', JSON.stringify(existing));
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
+    try {
+      if (isValidUUID(targetId)) {
+        await supabase
+          .from('profiles')
+          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .eq('id', targetId);
+      } else if (target?.email) {
+        await supabase
+          .from('profiles')
+          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .eq('email', target.email);
+      }
+    } catch {
+      // Ignore
+    }
+
+    await this.logAudit({
+      action_type: 'UPDATE_METADATA',
+      action_details: `Đã kích hoạt tài khoản thành viên ${targetName} (Trạng thái: Đang hoạt động)`,
+      performed_by_name: 'Admin',
+      performed_by_role: 'admin',
+    });
+
+    return true;
+  },
+
   // Toggle User Lock/Unlock Status with Root Admin Protection
   async toggleUserLockStatus(userId: string, currentStatus?: string): Promise<boolean> {
     const safeProfiles = await this.fetchProfiles();

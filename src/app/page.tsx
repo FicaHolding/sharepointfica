@@ -1157,7 +1157,7 @@ function SharePointContent() {
         </div>
       )}
 
-      {/* SharePoint Topbar with Custom Company Logo Support */}
+      {/* SharePoint Topbar with Custom Company Logo & Notification Bell Activation */}
       <Topbar
         currentUser={currentUser}
         searchQuery={globalSearchQuery}
@@ -1169,10 +1169,21 @@ function SharePointContent() {
             localStorage.setItem('fica_user_profile', JSON.stringify(updated));
           }
         }}
-        onOpenUserManagement={() => setIsUserManagementModalOpen(true)}
+        onOpenUserManagement={() => {
+          if (currentUser.role === 'staff' || currentUser.role === 'client') {
+            addToast('error', 'Truy cập bị từ chối!', 'Tài khoản Staff không có quyền xem hoặc chỉnh sửa Cài đặt hệ thống.');
+            return;
+          }
+          setIsUserManagementModalOpen(true);
+        }}
         onOpenProfile={() => setIsUserProfileModalOpen(true)}
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         companyLogoUrl={companyLogoUrl}
+        systemUsers={systemUsers}
+        onRefreshUsers={async () => {
+          const profiles = await sharepointService.fetchProfiles();
+          if (profiles) setSystemUsers(profiles);
+        }}
       />
 
       {/* Main Container */}
@@ -1180,8 +1191,13 @@ function SharePointContent() {
         {/* Left Sidebar (Desktop Fixed & Mobile Slide-over Drawer) */}
         <Sidebar
           activeTab={activeTab}
+          userRole={currentUser.role}
           onTabChange={(tab) => {
             if (tab === 'settings') {
+              if (currentUser.role === 'staff' || currentUser.role === 'client') {
+                addToast('error', 'Truy cập bị từ chối!', 'Tài khoản Staff không có quyền xem hoặc chỉnh sửa Cài đặt hệ thống.');
+                return;
+              }
               setIsUserManagementModalOpen(true);
             } else {
               setActiveTab(tab);

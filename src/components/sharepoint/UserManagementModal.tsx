@@ -675,6 +675,21 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 </button>
                               )}
 
+                              {/* 1-Click Direct Activation Button */}
+                              {u.status === 'pending' && (
+                                <button
+                                  onClick={async () => {
+                                    await sharepointService.activateUserDirectly(u.id);
+                                    refreshUsers();
+                                  }}
+                                  className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2 py-1 rounded text-[11px] transition-colors shadow-xs"
+                                  title="Kích hoạt tài khoản ngay lập tức (Không cần mở email xác nhận)"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                  <span>Kích hoạt ngay</span>
+                                </button>
+                              )}
+
                               {/* Resend Invite */}
                               {u.status === 'pending' && (
                                 <button
