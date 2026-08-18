@@ -207,7 +207,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
   const isSuperAdmin =
     currentUserRole === 'admin' ||
-    (currentUserEmail || '').toLowerCase() === 'fica.holding@gmail.com';
+    (currentUserEmail || '').toLowerCase() === 'fica.holding@gmail.com' ||
+    (typeof window !== 'undefined' &&
+      (localStorage.getItem('fica_current_user_email') || '').toLowerCase() === 'fica.holding@gmail.com');
 
   const safeUsers =
     Array.isArray(dbUsers) && dbUsers.length > 0
@@ -417,7 +419,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const getStatusBadge = (s?: string) => {
     switch (s) {
       case 'pending':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Đang chờ xác nhận</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Đang chờ Admin duyệt</span>;
       case 'disabled':
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">Đã khóa</span>;
       default:
@@ -675,18 +677,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 </button>
                               )}
 
-                              {/* 1-Click Direct Activation Button */}
+                              {/* 1-Click Admin Phê Duyệt Button */}
                               {u.status === 'pending' && (
                                 <button
                                   onClick={async () => {
                                     await sharepointService.activateUserDirectly(u.id);
                                     refreshUsers();
                                   }}
-                                  className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2 py-1 rounded text-[11px] transition-colors shadow-xs"
-                                  title="Kích hoạt tài khoản ngay lập tức (Không cần mở email xác nhận)"
+                                  className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1 rounded text-[11px] transition-colors shadow-xs cursor-pointer"
+                                  title="Phê duyệt và kích hoạt tài khoản thành viên ngay lập tức"
                                 >
                                   <UserCheck className="w-3.5 h-3.5" />
-                                  <span>Kích hoạt ngay</span>
+                                  <span>Phê Duyệt</span>
                                 </button>
                               )}
 

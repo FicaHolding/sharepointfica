@@ -83,7 +83,7 @@ export default function LoginPage() {
         if (typeof window !== 'undefined') {
           localStorage.setItem(`fica_pass_${cleanEmail}`, cleanPassword);
         }
-        setSuccessMsg(`Đăng ký tài khoản "${cleanEmail}" thành công! Đã ghi nhận mật khẩu riêng. Bạn có thể đăng nhập ngay.`);
+        setSuccessMsg(`Đăng ký tài khoản "${cleanEmail}" thành công! Yêu cầu tạo tài khoản đã gửi đến Admin Fica Holding để phê duyệt. Bạn có thể đăng nhập sau khi Admin duyệt.`);
         setMode('login');
       } else {
         setErrorMsg(res.error || 'Lỗi tạo tài khoản mới.');
@@ -163,6 +163,11 @@ export default function LoginPage() {
       if (matchedProfile) {
         if (matchedProfile.status === 'disabled') {
           setErrorMsg(`Tài khoản "${cleanEmail}" hiện đang bị tạm khóa. Vui lòng liên hệ Admin để mở khóa!`);
+          return;
+        }
+
+        if (matchedProfile.status === 'pending') {
+          setErrorMsg(`Tài khoản "${cleanEmail}" của bạn đang chờ Admin Fica Holding phê duyệt. Vui lòng liên hệ Admin để được kích hoạt!`);
           return;
         }
 

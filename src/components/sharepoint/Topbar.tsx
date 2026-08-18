@@ -211,10 +211,10 @@ export const Topbar: React.FC<TopbarProps> = ({
               <div className="p-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between font-bold text-slate-200">
                 <span className="flex items-center space-x-2">
                   <Bell className="w-4 h-4 text-blue-400" />
-                  <span>Thông Báo & Xác Nhận Tài Khoản</span>
+                  <span>Yêu Cầu Phê Duyệt Tài Khoản</span>
                 </span>
-                <span className="bg-blue-600/30 text-blue-300 border border-blue-500/40 text-[10px] px-2 py-0.5 rounded-full font-mono">
-                  {pendingUsers.length} cần xác nhận
+                <span className="bg-amber-600/30 text-amber-300 border border-amber-500/40 text-[10px] px-2 py-0.5 rounded-full font-mono">
+                  {pendingUsers.length} chờ phê duyệt
                 </span>
               </div>
 
@@ -230,7 +230,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 font-mono truncate">{pUser.email}</p>
-                        <p className="text-[10px] text-amber-400 font-medium">⚠️ Đang chờ xác nhận tài khoản</p>
+                        <p className="text-[10px] text-amber-400 font-medium">⚠️ Đăng ký mới - Đang chờ Admin phê duyệt</p>
                       </div>
 
                       {(userRole === 'admin' || userRole === 'manager') && (
@@ -241,10 +241,10 @@ export const Topbar: React.FC<TopbarProps> = ({
                             setShowNotificationDropdown(false);
                           }}
                           className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg flex items-center space-x-1 shrink-0 transition-colors shadow-xs cursor-pointer"
-                          title="Kích hoạt tài khoản ngay lập tức"
+                          title="Phê duyệt và kích hoạt tài khoản ngay lập tức"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Kích hoạt ngay</span>
+                          <span>Phê Duyệt</span>
                         </button>
                       )}
                     </div>
