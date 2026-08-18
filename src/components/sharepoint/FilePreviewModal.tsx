@@ -43,15 +43,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [viewEngine, setViewEngine] = useState<'office' | 'google' | 'native'>('office');
+  const [viewEngine, setViewEngine] = useState<'native'>('native');
   const [loading, setLoading] = useState(true);
   const [hasStorageError, setHasStorageError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [httpCloudUrl, setHttpCloudUrl] = useState<string | null>(null);
-  const [isEditingMode, setIsEditingMode] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // Native Content Render States (.docx, .xlsx)
   const [renderingDoc, setRenderingDoc] = useState(false);
@@ -59,7 +56,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [excelHtml, setExcelHtml] = useState<string | null>(null);
   const [renderSuccess, setRenderSuccess] = useState(false);
   const docContainerRef = useRef<HTMLDivElement>(null);
-  const editableContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadPreviewUrl() {
@@ -73,7 +69,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setRenderSuccess(false);
       setFileUrl(null);
       setHttpCloudUrl(null);
-      setViewEngine('office');
+      setViewEngine('native');
 
       if (!file.storage_path) {
         setLoading(false);
@@ -234,11 +230,19 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
                 const isBold = p.getElementsByTagName('w:b').length > 0;
 
-                // Special formatting for National Motto & Headers
-                if (cleanP.includes('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM') || cleanP.includes('Độc lập - Tự do - Hạnh phúc') || cleanP.includes('o0o') || cleanP.includes('---')) {
-                  html += `<div style="text-align: center; font-weight: bold; font-size: 15px; margin: 4px 0; font-family: serif; text-transform: uppercase; color: #0f172a;">${cleanP}</div>`;
+                // Special formatting for National Motto & Headers to prevent merged text bug
+                if (cleanP.includes('VIỆT NAM') && (cleanP.includes('ĐỘC LẬP') || cleanP.includes('Độc lập'))) {
+                  html += `<div style="text-align: center; font-weight: bold; font-size: 15px; margin: 6px 0 2px 0; font-family: serif; text-transform: uppercase; color: #0f172a;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>`;
+                  html += `<div style="text-align: center; font-weight: bold; font-size: 13px; margin: 2px 0 4px 0; font-family: serif; color: #0f172a;">Độc lập - Tự do - Hạnh phúc</div>`;
+                  html += `<div style="text-align: center; font-size: 12px; margin: 4px 0 12px 0; font-family: serif; color: #64748b;">----------o0o----------</div>`;
+                } else if (cleanP.includes('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM')) {
+                  html += `<div style="text-align: center; font-weight: bold; font-size: 15px; margin: 6px 0; font-family: serif; text-transform: uppercase; color: #0f172a;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>`;
+                } else if (cleanP.includes('Độc lập') || cleanP.includes('ĐỘC LẬP')) {
+                  html += `<div style="text-align: center; font-weight: bold; font-size: 13px; margin: 4px 0; font-family: serif; color: #0f172a;">Độc lập - Tự do - Hạnh phúc</div>`;
+                } else if (cleanP.includes('o0o') || cleanP.includes('000') || cleanP.includes('---')) {
+                  html += `<div style="text-align: center; font-size: 12px; margin: 4px 0 12px 0; font-family: serif; color: #64748b;">----------o0o----------</div>`;
                 } else if (cleanP.startsWith('HỢP ĐỒNG') || cleanP.startsWith('CĂN CỨ') || (isBold && cleanP.length < 120)) {
-                  html += `<h3 style="${alignStyle || 'text-align: center;'} font-weight: bold; font-size: 16px; margin: 12px 0 6px 0; font-family: serif; color: #0284c7;">${cleanP}</h3>`;
+                  html += `<h3 style="${alignStyle || 'text-align: center;'} font-weight: bold; font-size: 16px; margin: 14px 0 8px 0; font-family: serif; color: #0284c7;">${cleanP}</h3>`;
                 } else {
                   html += `<p style="${alignStyle} margin: 8px 0; line-height: 1.6; font-size: 14px; font-family: serif; color: #1e293b;">${cleanP}</p>`;
                 }
@@ -347,28 +351,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     }
   };
 
-  const handleSaveLiveEdit = async () => {
-    if (!file) return;
-    setIsSavingEdit(true);
-    setSaveSuccessMsg(null);
-
-    const editedHtml = editableContentRef.current?.innerHTML || fallbackHtml || excelHtml || '';
-    if (!editedHtml.trim()) {
-      setIsSavingEdit(false);
-      return;
-    }
-
-    const res = await sharepointService.saveLiveEditedFile(file, editedHtml);
-    if (res.success) {
-      file.current_version = res.newVersion;
-      setSaveSuccessMsg(`Đã lưu phiên bản v${res.newVersion} thành công trực tiếp trên WebApp!`);
-      setIsEditingMode(false);
-      if (onSuccess) onSuccess();
-      setTimeout(() => setSaveSuccessMsg(null), 4000);
-    }
-    setIsSavingEdit(false);
-  };
-
   if (!isOpen || !file) return null;
 
   return (
@@ -406,94 +388,35 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           </div>
 
-          {/* Middle: Engine Selector for Word/Excel or Zoom Controls */}
-          {(isDoc || isSpreadsheet) ? (
-            <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800 text-[11px] sm:text-xs font-sans">
-              <button
-                onClick={() => setViewEngine('office')}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
-                  viewEngine === 'office'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-                title="Xem chuẩn Microsoft Word / Excel trên Web (Không cần tải file)"
-              >
-                <span>🏢 <span className="hidden xs:inline">MS </span>Office<span className="hidden md:inline"> Web</span></span>
-              </button>
-              <button
-                onClick={() => setViewEngine('google')}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
-                  viewEngine === 'google'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-                title="Xem bằng Trình xem Google Docs (Không cần tải file)"
-              >
-                <span>🌐 Google<span className="hidden md:inline"> Docs</span></span>
-              </button>
-              <button
-                onClick={() => setViewEngine('native')}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1 ${
-                  viewEngine === 'native'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-                title="Xem nhanh bản văn bản rút gọn"
-              >
-                <span>📄 <span className="hidden xs:inline">Xem </span>Nhanh</span>
-              </button>
-            </div>
-          ) : (
-            <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-              <button
-                onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Thu nhỏ"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <span className="text-xs font-mono font-semibold px-2 text-slate-300">{zoomLevel}%</span>
-              <button
-                onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Phóng to"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <div className="h-4 w-[1px] bg-slate-800 mx-1" />
-              <button
-                onClick={() => setRotation((r) => (r + 90) % 360)}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Xoay 90 độ"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          {/* Middle: Zoom & Rotation Controls */}
+          <div className="hidden md:flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button
+              onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+              title="Thu nhỏ"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <span className="text-xs font-mono font-semibold px-2 text-slate-300">{zoomLevel}%</span>
+            <button
+              onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+              title="Phóng to"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <div className="h-4 w-[1px] bg-slate-800 mx-1" />
+            <button
+              onClick={() => setRotation((r) => (r + 90) % 360)}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+              title="Xoay 90 độ"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          </div>
 
           {/* Right: Native App Launcher & Download & Close */}
           <div className="flex items-center space-x-2 shrink-0">
-            {/* Live WebApp Editor Toggle Button */}
-            {(isDoc || isSpreadsheet) && (
-              <button
-                onClick={() => {
-                  setIsEditingMode(!isEditingMode);
-                  if (!isEditingMode) setViewEngine('native');
-                }}
-                className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px] ${
-                  isEditingMode
-                    ? 'bg-amber-500 text-white animate-pulse'
-                    : 'bg-amber-600/20 text-amber-300 border border-amber-500/40 hover:bg-amber-600/30'
-                }`}
-                title="Sửa nội dung văn bản/hợp đồng trực tiếp trên WebApp không cần mở phần mềm PC"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {isEditingMode ? '👁️ Thoát Chỉnh Sửa' : '✏️ Chỉnh Sửa Trực Tiếp'}
-                </span>
-              </button>
-            )}
-
             {/* Native Desktop Software Launcher Button */}
             {(isDoc || isSpreadsheet) && (
               <button
@@ -622,87 +545,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               </div>
               <audio controls src={fileUrl} className="w-full rounded-lg" />
             </div>
-          ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'office' && officeViewerUrl ? (
-            /* Official Microsoft Office Web Viewer (0 Download Required) */
-            <div className="w-full h-full flex flex-col space-y-1">
-              <div className="bg-slate-900 text-slate-300 text-[11px] px-3 py-1.5 rounded-lg border border-slate-800 flex items-center justify-between shrink-0">
-                <span className="truncate">💡 Nếu Microsoft báo "Không tìm thấy tệp", hãy bấm nút <b>[ 📄 Xem Nhanh ]</b> để xem ngay 100% đầy đủ định dạng tại chỗ!</span>
-                <button
-                  onClick={() => setViewEngine('native')}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded-md text-[10px] ml-2 shrink-0 transition-colors shadow-xs"
-                >
-                  Chuyển sang Xem Nhanh →
-                </button>
-              </div>
-              <iframe
-                src={officeViewerUrl}
-                className="w-full flex-1 rounded-xl border border-slate-800 bg-white shadow-2xl"
-                title={file.name}
-              />
-            </div>
-          ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'google' && googleViewerUrl ? (
-            /* Official Google Docs Web Viewer (0 Download Required) */
-            <div className="w-full h-full flex flex-col space-y-1">
-              <div className="bg-slate-900 text-slate-300 text-[11px] px-3 py-1.5 rounded-lg border border-slate-800 flex items-center justify-between shrink-0">
-                <span className="truncate">💡 Nếu Google báo "Không có bản xem trước", hãy bấm nút <b>[ 📄 Xem Nhanh ]</b> để xem ngay 100% đầy đủ định dạng tại chỗ!</span>
-                <button
-                  onClick={() => setViewEngine('native')}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded-md text-[10px] ml-2 shrink-0 transition-colors shadow-xs"
-                >
-                  Chuyển sang Xem Nhanh →
-                </button>
-              </div>
-              <iframe
-                src={googleViewerUrl}
-                className="w-full flex-1 rounded-xl border border-slate-800 bg-white shadow-2xl"
-                title={file.name}
-              />
-            </div>
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
             <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
-              {/* Live Edit Banner & Save Action */}
-              {isEditingMode && (
-                <div className="w-full max-w-4xl bg-amber-950/90 border border-amber-700/60 p-3 rounded-xl flex items-center justify-between text-amber-200 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
-                  <div className="flex items-center space-x-2 min-w-0 pr-2">
-                    <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span className="truncate">
-                      <b>Chế Độ Chỉnh Sửa Trực Tiếp Trên WebApp:</b> Nhấp vào dòng chữ bên dưới để gõ, chỉnh sửa văn bản. Bấm "Lưu Phiên Bản Mới" để lưu tự động!
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleSaveLiveEdit}
-                    disabled={isSavingEdit}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-md shrink-0 disabled:opacity-50 min-h-[38px]"
-                  >
-                    {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Lưu Phiên Bản Mới (v{(file.current_version || 1) + 1})</span>
-                  </button>
-                </div>
-              )}
-
-              {saveSuccessMsg && (
-                <div className="w-full max-w-4xl bg-emerald-900/90 border border-emerald-600 text-emerald-100 p-3 rounded-xl flex items-center space-x-2 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span className="font-bold">{saveSuccessMsg}</span>
-                </div>
-              )}
-
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className={`w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border font-serif leading-relaxed text-sm select-text my-auto ${
-                  isEditingMode ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-50/10' : 'border-slate-300'
-                }`}
+                className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border border-slate-300 font-serif leading-relaxed text-sm select-text my-auto"
               >
                 {/* Header Banner */}
                 <div className="border-b border-slate-200 pb-3 mb-6 flex items-center justify-between font-sans text-xs text-slate-500">
                   <span className="font-bold text-slate-700 flex items-center space-x-1.5">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span>NỘI DUNG TÀI LIỆU WORD {isEditingMode ? '(ĐANG CHỈNH SỬA TRỰC TIẾP)' : '(NATIVE PREVIEW)'}</span>
+                    <span>NỘI DUNG TÀI LIỆU WORD (XEM PREVIEW A4)</span>
                   </span>
                   <button
                     onClick={handleOpenNativeDesktopApp}
@@ -714,17 +572,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 </div>
 
                 {/* docx-preview Container */}
-                <div ref={docContainerRef} className="docx-container text-slate-900" contentEditable={isEditingMode} suppressContentEditableWarning />
+                <div ref={docContainerRef} className="docx-container text-slate-900" />
 
                 {/* JSZip XML Fallback HTML Container */}
                 {fallbackHtml && (
                   <div
-                    ref={editableContentRef}
-                    contentEditable={isEditingMode}
-                    suppressContentEditableWarning
-                    className={`prose max-w-none text-slate-900 prose-headings:font-sans prose-headings:font-bold prose-p:my-2 outline-none ${
-                      isEditingMode ? 'p-2 border border-dashed border-amber-400/80 rounded bg-white' : ''
-                    }`}
+                    className="prose max-w-none text-slate-900 prose-headings:font-sans prose-headings:font-bold prose-p:my-2 outline-none"
                     dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                   />
                 )}
@@ -733,47 +586,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           ) : isSpreadsheet && excelHtml ? (
             /* Native Excel Sheet Table View (.xlsx, .xls, .csv) */
             <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
-              {/* Live Edit Banner & Save Action */}
-              {isEditingMode && (
-                <div className="w-full max-w-6xl bg-amber-950/90 border border-amber-700/60 p-3 rounded-xl flex items-center justify-between text-amber-200 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
-                  <div className="flex items-center space-x-2 min-w-0 pr-2">
-                    <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span className="truncate">
-                      <b>Chế Độ Chỉnh Sửa Bảng Tính Trực Tiếp:</b> Nhấp vào các ô số liệu bên dưới để sửa. Bấm "Lưu Phiên Bản Mới" để lưu tự động!
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleSaveLiveEdit}
-                    disabled={isSavingEdit}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-md shrink-0 disabled:opacity-50 min-h-[38px]"
-                  >
-                    {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    <span>Lưu Phiên Bản Mới (v{(file.current_version || 1) + 1})</span>
-                  </button>
-                </div>
-              )}
-
-              {saveSuccessMsg && (
-                <div className="w-full max-w-6xl bg-emerald-900/90 border border-emerald-600 text-emerald-100 p-3 rounded-xl flex items-center space-x-2 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span className="font-bold">{saveSuccessMsg}</span>
-                </div>
-              )}
-
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className={`w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border font-sans text-xs select-text my-auto ${
-                  isEditingMode ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-slate-300'
-                }`}
+                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text my-auto"
               >
                 <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between font-sans text-xs text-slate-500">
                   <span className="font-bold text-slate-700 flex items-center space-x-1.5">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    <span>BẢNG TÍNH EXCEL {isEditingMode ? '(ĐANG CHỈNH SỬA TRỰC TIẾP)' : '(PREVIEW)'}</span>
+                    <span>BẢNG TÍNH EXCEL (PREVIEW)</span>
                   </span>
                   <button
                     onClick={handleOpenNativeDesktopApp}
