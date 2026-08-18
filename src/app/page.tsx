@@ -1073,7 +1073,26 @@ function SharePointContent() {
     return list;
   }, [clients, activeTab, globalSearchQuery, filterState.searchQuery, filterState.serviceType, activeClientsList, archivedClientsList]);
 
-  // FILTERED FILES LIST WITH SAFE SUBFOLDER & CLIENT MATCHING
+  // HELPER: Canonical Folder Category Mapper ('01', '02', '03', '04' or exact subfolder ID)
+  const getCanonicalFolderCategory = (folderIdOrName?: string): string => {
+    if (!folderIdOrName) return '01';
+
+    const str = folderIdOrName.trim();
+
+    // Standard 4 System Template Folders matching
+    if (str.startsWith('sf111111') || str.includes('01_') || str.includes('Pháp lý') || str === '01') return '01';
+    if (str.startsWith('sf222222') || str.includes('02_') || str.includes('Chứng từ') || str === '02') return '02';
+    if (str.startsWith('sf333333') || str.includes('03_') || str.includes('Báo cáo') || str === '03') return '03';
+    if (str.startsWith('sf444444') || str.includes('04_') || str.includes('Tài liệu khác') || str === '04') return '04';
+
+    // Numerical prefix matching (e.g. '05_Hồ sơ tư vấn' -> '05')
+    const match = str.match(/^(\d{2})_/);
+    if (match) return match[1];
+
+    return str;
+  };
+
+  // FILTERED FILES LIST WITH SAFE SUBFOLDER & CLIENT ISOLATION
   const displayedFiles = useMemo(() => {
     let list = files;
 
@@ -1082,37 +1101,16 @@ function SharePointContent() {
     }
 
     if (selectedSubFolder) {
+      const selectedCategory = getCanonicalFolderCategory(selectedSubFolder.id || selectedSubFolder.name);
+
       list = list.filter((f) => {
-        // 1. Direct ID match
-        if (f.folder_id === selectedSubFolder.id) return true;
+        // Direct ID or Name exact match
+        if (f.folder_id === selectedSubFolder.id || f.folder_id === selectedSubFolder.name) return true;
 
-        // 2. Direct Name match
-        if (f.folder_id === selectedSubFolder.name) return true;
+        const fileCategory = getCanonicalFolderCategory(f.folder_id);
 
-        // 3. Match deterministic subfolder ID prefix (e.g. sf111111 vs sf222222)
-        if (f.folder_id && f.folder_id.startsWith('sf') && selectedSubFolder.id.startsWith('sf')) {
-          const fSub = f.folder_id.substring(0, 8);
-          const sSub = selectedSubFolder.id.substring(0, 8);
-          if (fSub === sSub) return true;
-        }
-
-        // 4. Subfolder prefix matching ('01', '02', '03', '04')
-        const subFolderPrefix = selectedSubFolder.name.substring(0, 2);
-        if (/^\d{2}$/.test(subFolderPrefix)) {
-          if (
-            f.folder_id &&
-            (f.folder_id.startsWith(`sf${subFolderPrefix.repeat(3)}`) || f.folder_id.includes(`_${subFolderPrefix}`))
-          ) {
-            return true;
-          }
-        }
-
-        // 5. If file has no folder_id at all, default it to '01_Pháp lý & Hợp đồng'
-        if (!f.folder_id) {
-          return subFolderPrefix === '01';
-        }
-
-        return false;
+        // Strict category isolation ('01' === '01', '02' === '02', etc.)
+        return fileCategory === selectedCategory;
       });
     }
 
