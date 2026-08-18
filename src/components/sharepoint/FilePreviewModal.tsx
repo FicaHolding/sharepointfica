@@ -76,32 +76,54 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         const targetUrl = res.url || res.httpSignedUrl;
 
         if (targetUrl) {
-          // Verify URL content isn't a Supabase 404 JSON string before assigning to iframe
+          // 1. Data URLs & Blob URLs are 100% verified local/cached content
+          if (targetUrl.startsWith('data:') || targetUrl.startsWith('blob:')) {
+            setFileUrl(targetUrl);
+            setLoading(false);
+            return;
+          }
+
+          // 2. HTTP URLs: Fetch and verify blob before assigning to iframe to prevent raw 404 JSON rendering
           if (targetUrl.startsWith('http')) {
             try {
-              const testRes = await fetch(targetUrl, { method: 'GET' });
-              if (testRes.status === 404) {
+              const testRes = await fetch(targetUrl);
+              if (!testRes.ok || testRes.status === 404) {
                 setHasStorageError(true);
-                setErrorMessage('Bucket Storage chưa được khởi tạo trên Supabase Cloud hoặc file vật lý chưa được tải lên.');
+                setErrorMessage('File vật lý chưa được lưu trên Supabase Storage Cloud (hoặc Bucket documents chưa được chạy SQL Script).');
                 setLoading(false);
                 return;
               }
+
               const contentType = testRes.headers.get('content-type') || '';
               if (contentType.includes('application/json')) {
                 const text = await testRes.clone().text();
-                if (text.includes('NoSuchBucket') || text.includes('Bucket not found')) {
+                if (text.includes('NoSuchBucket') || text.includes('Bucket not found') || text.includes('404')) {
                   setHasStorageError(true);
-                  setErrorMessage('Bucket Storage chưa được mở Public trên Supabase Cloud.');
+                  setErrorMessage('Bucket Storage "documents" chưa được khởi tạo trên Supabase Cloud.');
                   setLoading(false);
                   return;
                 }
               }
-            } catch {
-              // Ignore fetch verification error on CORS
-            }
-          }
 
-          setFileUrl(targetUrl);
+              // For PDFs: Convert response to a clean Blob object URL for 100% fail-safe iframe/object rendering
+              if (isPdf) {
+                const pdfBlob = await testRes.blob();
+                if (pdfBlob && pdfBlob.size > 0 && !pdfBlob.type.includes('json')) {
+                  const cleanPdfBlobUrl = URL.createObjectURL(pdfBlob);
+                  setFileUrl(cleanPdfBlobUrl);
+                  setLoading(false);
+                  return;
+                }
+              }
+
+              setFileUrl(targetUrl);
+            } catch {
+              // Fallback for CORS
+              setFileUrl(targetUrl);
+            }
+          } else {
+            setFileUrl(targetUrl);
+          }
         } else {
           setHasStorageError(true);
           setErrorMessage(res.error || 'File vật lý chưa có trên Storage.');
@@ -473,12 +495,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               </div>
             </div>
           ) : isPdf && fileUrl ? (
-            /* Native PDF Viewer */
-            <iframe
-              src={`${fileUrl}#toolbar=1&navpanes=1`}
+            /* Native PDF Viewer with Object Fallback */
+            <object
+              data={fileUrl.startsWith('blob:') || fileUrl.startsWith('data:') ? fileUrl : `${fileUrl}#toolbar=1&navpanes=1`}
+              type="application/pdf"
               className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
-              title={file.name}
-            />
+            >
+              <iframe
+                src={fileUrl.startsWith('blob:') || fileUrl.startsWith('data:') ? fileUrl : `${fileUrl}#toolbar=1&navpanes=1`}
+                className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
+                title={file.name}
+              />
+            </object>
           ) : isImage && fileUrl ? (
             /* Native Image Viewer */
             <div
