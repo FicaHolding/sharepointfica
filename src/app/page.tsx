@@ -631,27 +631,41 @@ function SharePointContent() {
   };
 
   // DELETE FOLDER HANDLER (Recycle Bin vs Permanent)
-  const handleConfirmDeleteClient = async (clientId: string, mode: 'recycle' | 'permanent') => {
-    const target = clients.find((c) => c.id === clientId);
+  const handleConfirmDeleteClient = async (
+    targetOrId: string | ClientFolder,
+    mode: 'recycle' | 'permanent'
+  ) => {
+    let target: ClientFolder | undefined;
+
+    if (typeof targetOrId === 'object' && targetOrId !== null) {
+      target = targetOrId;
+    } else {
+      target =
+        clients.find((c) => c.id === targetOrId) ||
+        (selectedClientForDelete?.id === targetOrId ? selectedClientForDelete : undefined);
+    }
+
     if (!target) return;
+
+    const clientId = target.id;
+    const cleanCode = target.code || '';
+    const cleanName = target.name || target.folder_name || '';
 
     if (mode === 'recycle') {
       await handleArchiveClient(target);
       addToast('info', 'Đã chuyển hồ sơ vào Thùng rác (Archive)', `Hồ sơ ${target.folder_name} hiện ở dạng Read-Only.`);
     } else {
-      const cleanCode = target.code || '';
-      const cleanName = target.name || target.folder_name || '';
-
       await sharepointService.deleteClient(clientId, 'permanent', cleanCode, cleanName);
 
       setClients((prev) =>
-        prev.filter(
-          (c) =>
-            c.id !== clientId &&
-            (!cleanCode || c.code?.toUpperCase() !== cleanCode.toUpperCase()) &&
-            (!cleanName || !c.folder_name?.toLowerCase().includes(cleanName.toLowerCase()))
-        )
+        prev.filter((c) => {
+          if (c.id === clientId) return false;
+          if (cleanCode && c.code && c.code.toUpperCase() === cleanCode.toUpperCase()) return false;
+          if (cleanName && c.folder_name && c.folder_name.toLowerCase().includes(cleanName.toLowerCase())) return false;
+          return true;
+        })
       );
+
       setFiles((prev) => prev.filter((f) => f.client_id !== clientId));
 
       if (selectedClient?.id === clientId || (cleanCode && selectedClient?.code?.toUpperCase() === cleanCode.toUpperCase())) {

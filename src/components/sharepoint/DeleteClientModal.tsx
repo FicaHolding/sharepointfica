@@ -8,7 +8,7 @@ interface DeleteClientModalProps {
   client: ClientFolder | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirmDelete: (clientId: string, mode: 'recycle' | 'permanent') => void;
+  onConfirmDelete: (clientId: string | ClientFolder, mode: 'recycle' | 'permanent') => void;
   userRole: UserRole;
 }
 
@@ -40,7 +40,7 @@ export const DeleteClientModal: React.FC<DeleteClientModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-red-300 hover:text-white hover:bg-red-900 rounded-md transition-colors"
+            className="p-1.5 text-red-300 hover:text-white hover:bg-red-900 rounded-md transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -78,10 +78,10 @@ export const DeleteClientModal: React.FC<DeleteClientModalProps> = ({
                 {/* Option 1: Move to Recycle Bin (Recommended) */}
                 <button
                   onClick={() => {
-                    onConfirmDelete(client.id, 'recycle');
+                    onConfirmDelete(client, 'recycle');
                     onClose();
                   }}
-                  className="w-full p-3 bg-slate-50 hover:bg-amber-50 border border-slate-300 hover:border-amber-400 rounded-xl text-left transition-all flex items-center justify-between group"
+                  className="w-full p-3 bg-slate-50 hover:bg-amber-50 border border-slate-300 hover:border-amber-400 rounded-xl text-left transition-all flex items-center justify-between group cursor-pointer"
                 >
                   <div className="flex items-center space-x-3">
                     <div className="p-2 rounded-lg bg-amber-100 text-amber-800">
@@ -101,10 +101,10 @@ export const DeleteClientModal: React.FC<DeleteClientModalProps> = ({
                 {/* Option 2: Hard Permanent Delete */}
                 <button
                   onClick={() => {
-                    onConfirmDelete(client.id, 'permanent');
+                    onConfirmDelete(client, 'permanent');
                     onClose();
                   }}
-                  className="w-full p-3 bg-slate-50 hover:bg-red-50 border border-slate-300 hover:border-red-400 rounded-xl text-left transition-all flex items-center justify-between group"
+                  className="w-full p-3 bg-slate-50 hover:bg-red-50 border border-slate-300 hover:border-red-400 rounded-xl text-left transition-all flex items-center justify-between group cursor-pointer"
                 >
                   <div className="flex items-center space-x-3">
                     <div className="p-2 rounded-lg bg-red-100 text-red-800">
