@@ -1400,6 +1400,86 @@ export const sharepointService = {
     }
   },
 
+  // Save Live WebApp Edits directly to Supabase DB & Storage & IndexedDB (Auto-increment version)
+  async saveLiveEditedFile(
+    fileObj: DocumentFile,
+    editedHtml: string
+  ): Promise<{ success: boolean; newVersion: number; error?: string }> {
+    try {
+      const newVersion = (fileObj.current_version || 1) + 1;
+      const cleanPath = fileObj.storage_path.replace(/^\/+/, '');
+
+      // 1. Create updated HTML/Text file Blob
+      const editedBlob = new Blob([editedHtml], { type: 'text/html' });
+      const editedFile = new File([editedBlob], fileObj.name, { type: 'text/html' });
+
+      // 2. Save updated Blob to memory & IndexedDB
+      const newBlobUrl = URL.createObjectURL(editedBlob);
+      memoryFileCache.set(fileObj.storage_path, newBlobUrl);
+      memoryFileCache.set(cleanPath, newBlobUrl);
+      await saveBlobToIndexedDB(fileObj.storage_path, editedFile);
+      await saveBlobToIndexedDB(cleanPath, editedFile);
+
+      // 3. Upload updated Blob to Supabase Storage
+      try {
+        await supabase.storage
+          .from(SUPABASE_STORAGE_BUCKET)
+          .upload(fileObj.storage_path, editedBlob, { upsert: true });
+      } catch {
+        // Ignore storage error
+      }
+
+      // 4. Update file_contents table in Supabase DB for instant mobile cross-device sync
+      try {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          if (reader.result) {
+            await supabase.from('file_contents').upsert([
+              {
+                storage_path: fileObj.storage_path,
+                content_base64: reader.result as string,
+                created_at: new Date().toISOString(),
+              },
+            ]);
+          }
+        };
+        reader.readAsDataURL(editedBlob);
+      } catch {
+        // Ignore
+      }
+
+      // 5. Update documents & files tables with new current_version and updated_at timestamp
+      try {
+        if (isValidUUID(fileObj.id)) {
+          await supabase
+            .from('documents')
+            .update({ current_version: newVersion, updated_at: new Date().toISOString() })
+            .eq('id', fileObj.id);
+
+          await supabase
+            .from('files')
+            .update({ current_version: newVersion, updated_at: new Date().toISOString() })
+            .eq('id', fileObj.id);
+        }
+      } catch {
+        // Ignore
+      }
+
+      // 6. Log Audit Action
+      await this.logAudit({
+        client_id: fileObj.client_id,
+        action_type: 'UPDATE_METADATA',
+        action_details: `Chỉnh sửa trực tiếp tài liệu ${fileObj.name} trên WebApp (Nâng phiên bản v${newVersion})`,
+        performed_by_name: 'Admin',
+        performed_by_role: 'admin',
+      });
+
+      return { success: true, newVersion };
+    } catch (err: any) {
+      return { success: false, newVersion: fileObj.current_version || 1, error: err.message };
+    }
+  },
+
   // Replace / Attach Physical File Blob to an Existing Phantom Record
   async replacePhantomFile(
     file: File,

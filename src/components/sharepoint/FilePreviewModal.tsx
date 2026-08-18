@@ -16,6 +16,9 @@ import {
   Loader2,
   AlertTriangle,
   Laptop,
+  Edit3,
+  Save,
+  CheckCircle2,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { renderAsync } from 'docx-preview';
@@ -27,6 +30,7 @@ interface FilePreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDownload: (file: DocumentFile) => void;
+  onSuccess?: () => void;
 }
 
 export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
@@ -34,6 +38,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   isOpen,
   onClose,
   onDownload,
+  onSuccess,
 }) => {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [rotation, setRotation] = useState(0);
@@ -44,6 +49,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [httpCloudUrl, setHttpCloudUrl] = useState<string | null>(null);
+  const [isEditingMode, setIsEditingMode] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // Native Content Render States (.docx, .xlsx)
   const [renderingDoc, setRenderingDoc] = useState(false);
@@ -51,6 +59,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [excelHtml, setExcelHtml] = useState<string | null>(null);
   const [renderSuccess, setRenderSuccess] = useState(false);
   const docContainerRef = useRef<HTMLDivElement>(null);
+  const editableContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadPreviewUrl() {
@@ -338,6 +347,28 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     }
   };
 
+  const handleSaveLiveEdit = async () => {
+    if (!file) return;
+    setIsSavingEdit(true);
+    setSaveSuccessMsg(null);
+
+    const editedHtml = editableContentRef.current?.innerHTML || fallbackHtml || excelHtml || '';
+    if (!editedHtml.trim()) {
+      setIsSavingEdit(false);
+      return;
+    }
+
+    const res = await sharepointService.saveLiveEditedFile(file, editedHtml);
+    if (res.success) {
+      file.current_version = res.newVersion;
+      setSaveSuccessMsg(`Đã lưu phiên bản v${res.newVersion} thành công trực tiếp trên WebApp!`);
+      setIsEditingMode(false);
+      if (onSuccess) onSuccess();
+      setTimeout(() => setSaveSuccessMsg(null), 4000);
+    }
+    setIsSavingEdit(false);
+  };
+
   if (!isOpen || !file) return null;
 
   return (
@@ -442,6 +473,27 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
           {/* Right: Native App Launcher & Download & Close */}
           <div className="flex items-center space-x-2 shrink-0">
+            {/* Live WebApp Editor Toggle Button */}
+            {(isDoc || isSpreadsheet) && (
+              <button
+                onClick={() => {
+                  setIsEditingMode(!isEditingMode);
+                  if (!isEditingMode) setViewEngine('native');
+                }}
+                className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors shadow-xs min-h-[44px] ${
+                  isEditingMode
+                    ? 'bg-amber-500 text-white animate-pulse'
+                    : 'bg-amber-600/20 text-amber-300 border border-amber-500/40 hover:bg-amber-600/30'
+                }`}
+                title="Sửa nội dung văn bản/hợp đồng trực tiếp trên WebApp không cần mở phần mềm PC"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span className="hidden sm:inline">
+                  {isEditingMode ? '👁️ Thoát Chỉnh Sửa' : '✏️ Chỉnh Sửa Trực Tiếp'}
+                </span>
+              </button>
+            )}
+
             {/* Native Desktop Software Launcher Button */}
             {(isDoc || isSpreadsheet) && (
               <button
@@ -608,20 +660,49 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
-            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
+            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
+              {/* Live Edit Banner & Save Action */}
+              {isEditingMode && (
+                <div className="w-full max-w-4xl bg-amber-950/90 border border-amber-700/60 p-3 rounded-xl flex items-center justify-between text-amber-200 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
+                  <div className="flex items-center space-x-2 min-w-0 pr-2">
+                    <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span className="truncate">
+                      <b>Chế Độ Chỉnh Sửa Trực Tiếp Trên WebApp:</b> Nhấp vào dòng chữ bên dưới để gõ, chỉnh sửa văn bản. Bấm "Lưu Phiên Bản Mới" để lưu tự động!
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleSaveLiveEdit}
+                    disabled={isSavingEdit}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-md shrink-0 disabled:opacity-50 min-h-[38px]"
+                  >
+                    {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Lưu Phiên Bản Mới (v{(file.current_version || 1) + 1})</span>
+                  </button>
+                </div>
+              )}
+
+              {saveSuccessMsg && (
+                <div className="w-full max-w-4xl bg-emerald-900/90 border border-emerald-600 text-emerald-100 p-3 rounded-xl flex items-center space-x-2 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span className="font-bold">{saveSuccessMsg}</span>
+                </div>
+              )}
+
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border border-slate-300 font-serif leading-relaxed text-sm select-text my-auto"
+                className={`w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border font-serif leading-relaxed text-sm select-text my-auto ${
+                  isEditingMode ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-50/10' : 'border-slate-300'
+                }`}
               >
                 {/* Header Banner */}
                 <div className="border-b border-slate-200 pb-3 mb-6 flex items-center justify-between font-sans text-xs text-slate-500">
                   <span className="font-bold text-slate-700 flex items-center space-x-1.5">
                     <FileText className="w-4 h-4 text-blue-600" />
-                    <span>NỘI DUNG TÀI LIỆU WORD (NATIVE DOCX PREVIEW)</span>
+                    <span>NỘI DUNG TÀI LIỆU WORD {isEditingMode ? '(ĐANG CHỈNH SỬA TRỰC TIẾP)' : '(NATIVE PREVIEW)'}</span>
                   </span>
                   <button
                     onClick={handleOpenNativeDesktopApp}
@@ -633,12 +714,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 </div>
 
                 {/* docx-preview Container */}
-                <div ref={docContainerRef} className="docx-container text-slate-900" />
+                <div ref={docContainerRef} className="docx-container text-slate-900" contentEditable={isEditingMode} suppressContentEditableWarning />
 
                 {/* JSZip XML Fallback HTML Container */}
                 {fallbackHtml && (
                   <div
-                    className="prose max-w-none text-slate-900 prose-headings:font-sans prose-headings:font-bold prose-p:my-2"
+                    ref={editableContentRef}
+                    contentEditable={isEditingMode}
+                    suppressContentEditableWarning
+                    className={`prose max-w-none text-slate-900 prose-headings:font-sans prose-headings:font-bold prose-p:my-2 outline-none ${
+                      isEditingMode ? 'p-2 border border-dashed border-amber-400/80 rounded bg-white' : ''
+                    }`}
                     dangerouslySetInnerHTML={{ __html: fallbackHtml }}
                   />
                 )}
@@ -646,19 +732,48 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : isSpreadsheet && excelHtml ? (
             /* Native Excel Sheet Table View (.xlsx, .xls, .csv) */
-            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
+            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
+              {/* Live Edit Banner & Save Action */}
+              {isEditingMode && (
+                <div className="w-full max-w-6xl bg-amber-950/90 border border-amber-700/60 p-3 rounded-xl flex items-center justify-between text-amber-200 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
+                  <div className="flex items-center space-x-2 min-w-0 pr-2">
+                    <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span className="truncate">
+                      <b>Chế Độ Chỉnh Sửa Bảng Tính Trực Tiếp:</b> Nhấp vào các ô số liệu bên dưới để sửa. Bấm "Lưu Phiên Bản Mới" để lưu tự động!
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleSaveLiveEdit}
+                    disabled={isSavingEdit}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg flex items-center space-x-1.5 text-xs transition-colors shadow-md shrink-0 disabled:opacity-50 min-h-[38px]"
+                  >
+                    {isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    <span>Lưu Phiên Bản Mới (v{(file.current_version || 1) + 1})</span>
+                  </button>
+                </div>
+              )}
+
+              {saveSuccessMsg && (
+                <div className="w-full max-w-6xl bg-emerald-900/90 border border-emerald-600 text-emerald-100 p-3 rounded-xl flex items-center space-x-2 text-xs mb-3 shadow-lg shrink-0 animate-in fade-in">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span className="font-bold">{saveSuccessMsg}</span>
+                </div>
+              )}
+
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text my-auto"
+                className={`w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border font-sans text-xs select-text my-auto ${
+                  isEditingMode ? 'border-amber-400 ring-2 ring-amber-400/50' : 'border-slate-300'
+                }`}
               >
                 <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between font-sans text-xs text-slate-500">
-                  <span className="font-bold text-emerald-700 flex items-center space-x-1.5">
+                  <span className="font-bold text-slate-700 flex items-center space-x-1.5">
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    <span>NỘI DUNG BẢNG TÍNH EXCEL (NATIVE XLSX PREVIEW)</span>
+                    <span>BẢNG TÍNH EXCEL {isEditingMode ? '(ĐANG CHỈNH SỬA TRỰC TIẾP)' : '(PREVIEW)'}</span>
                   </span>
                   <button
                     onClick={handleOpenNativeDesktopApp}
