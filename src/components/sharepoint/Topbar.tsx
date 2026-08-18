@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '@/types/sharepoint';
+import { sharepointService } from '@/services/sharepointService';
 
 interface TopbarProps {
   currentUser: UserProfile;
