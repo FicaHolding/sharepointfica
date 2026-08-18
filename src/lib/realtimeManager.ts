@@ -7,14 +7,33 @@ class RealtimeManager {
   private channel: any = null;
   private isSubscribed = false;
   private listeners: Set<RealtimeCallback> = new Set();
+  private setupWindowListenersDone = false;
 
-  private constructor() {}
+  private constructor() {
+    this.setupWindowListeners();
+  }
 
   public static getInstance(): RealtimeManager {
     if (!RealtimeManager.instance) {
       RealtimeManager.instance = new RealtimeManager();
     }
     return RealtimeManager.instance;
+  }
+
+  private setupWindowListeners() {
+    if (typeof window === 'undefined' || this.setupWindowListenersDone) return;
+    this.setupWindowListenersDone = true;
+
+    // Mobile cross-device instant sync on tab switch or unlock
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        this.notifyListeners();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', () => this.notifyListeners());
+    window.addEventListener('online', () => this.notifyListeners());
   }
 
   public subscribe(callback: RealtimeCallback): () => void {
@@ -58,7 +77,7 @@ class RealtimeManager {
     }
   }
 
-  private notifyListeners() {
+  public notifyListeners() {
     this.listeners.forEach((callback) => {
       try {
         callback();

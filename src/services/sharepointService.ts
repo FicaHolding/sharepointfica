@@ -1352,12 +1352,11 @@ export const sharepointService = {
     this.syncLocalDocumentsToSupabase().catch(() => {});
 
     try {
-      let query = supabase.from('documents').select('*');
-      if (clientId && isValidUUID(clientId)) {
-        query = query.eq('client_id', clientId);
-      }
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      const { data, error } = await query;
       let cloudDocs: DocumentFile[] = [];
 
       if (!error && data && data.length > 0) {
@@ -1422,7 +1421,12 @@ export const sharepointService = {
 
       let allFilesList = Array.from(map.values());
       if (clientId) {
-        allFilesList = allFilesList.filter((f) => !f.client_id || f.client_id === clientId);
+        allFilesList = allFilesList.filter(
+          (f) =>
+            !f.client_id ||
+            f.client_id === clientId ||
+            (f.storage_path && f.storage_path.startsWith(`${clientId}/`))
+        );
       }
       return allFilesList;
     } catch {
