@@ -639,14 +639,28 @@ function SharePointContent() {
       await handleArchiveClient(target);
       addToast('info', 'Đã chuyển hồ sơ vào Thùng rác (Archive)', `Hồ sơ ${target.folder_name} hiện ở dạng Read-Only.`);
     } else {
-      await sharepointService.deleteClient(clientId, 'permanent');
-      setClients((prev) => prev.filter((c) => c.id !== clientId));
+      const cleanCode = target.code || '';
+      const cleanName = target.name || target.folder_name || '';
+
+      await sharepointService.deleteClient(clientId, 'permanent', cleanCode, cleanName);
+
+      setClients((prev) =>
+        prev.filter(
+          (c) =>
+            c.id !== clientId &&
+            (!cleanCode || c.code?.toUpperCase() !== cleanCode.toUpperCase()) &&
+            (!cleanName || !c.folder_name?.toLowerCase().includes(cleanName.toLowerCase()))
+        )
+      );
       setFiles((prev) => prev.filter((f) => f.client_id !== clientId));
-      if (selectedClient?.id === clientId) {
+
+      if (selectedClient?.id === clientId || (cleanCode && selectedClient?.code?.toUpperCase() === cleanCode.toUpperCase())) {
         setSelectedClient(null);
         setSelectedSubFolder(null);
         updateUrlState(null, null, activeTab);
       }
+
+      addToast('error', 'Đã xóa vĩnh viễn thư mục khách hàng khỏi hệ thống!', target.folder_name);
       router.refresh();
       pushAuditLog('DELETE_FILE', `Xóa vĩnh viễn thư mục khách hàng ${target.folder_name}`, undefined, target.folder_name);
     }

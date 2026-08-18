@@ -749,15 +749,27 @@ export const sharepointService = {
       }
     }
 
-    // Filter out permanently deleted client IDs so deleted clients NEVER resurrect on F5 refresh
+    // Filter out permanently deleted clients by ID, Code ('0901242639'), and Name ('SHK Holding')
     if (typeof window !== 'undefined') {
       try {
         const deletedIdsStored = localStorage.getItem('fica_deleted_client_ids');
         if (deletedIdsStored) {
           const deletedIds: string[] = JSON.parse(deletedIdsStored);
           if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-            for (const id of deletedIds) {
-              map.delete(id);
+            const lowerDeleted = deletedIds.map((d) => d.toLowerCase());
+            for (const [key, c] of Array.from(map.entries())) {
+              const matchesDeleted =
+                (c.id && lowerDeleted.includes(c.id.toLowerCase())) ||
+                (c.code && lowerDeleted.includes(c.code.toLowerCase())) ||
+                lowerDeleted.some(
+                  (d) =>
+                    (c.folder_name && c.folder_name.toLowerCase().includes(d)) ||
+                    (c.name && c.name.toLowerCase().includes(d))
+                );
+
+              if (matchesDeleted) {
+                map.delete(key);
+              }
             }
           }
         }
@@ -1097,31 +1109,48 @@ export const sharepointService = {
     }
   },
 
-  // Delete Client Folder (Permanent Delete with 100% Cascade DB & LocalStorage Purge)
-  async deleteClient(clientId: string, mode: 'recycle' | 'permanent'): Promise<boolean> {
+  // Delete Client Folder (Permanent Delete with 100% Cascade DB & LocalStorage Purge across ID, Code, Name)
+  async deleteClient(
+    clientId: string,
+    mode: 'recycle' | 'permanent',
+    clientCode?: string,
+    clientName?: string
+  ): Promise<boolean> {
     try {
       if (mode === 'recycle') {
         return await this.updateClientStatus(clientId, 'archived');
       }
 
+      const isTargetClient = (c: ClientFolder): boolean => {
+        if (c.id === clientId) return true;
+        if (clientCode && c.code && c.code.toUpperCase() === clientCode.toUpperCase()) return true;
+        if (clientName && c.folder_name && c.folder_name.toLowerCase().includes(clientName.toLowerCase())) return true;
+        if (clientName && c.name && c.name.toLowerCase().includes(clientName.toLowerCase())) return true;
+        return false;
+      };
+
       // 1. Permanent LocalStorage Cache Purge
       if (typeof window !== 'undefined') {
         try {
-          // Track deleted client ID to prevent resurrection on F5 refresh
+          // Track deleted client ID, Code, and Name to prevent resurrection on F5 refresh
           const deletedIdsStored = localStorage.getItem('fica_deleted_client_ids');
           let deletedIds: string[] = deletedIdsStored ? JSON.parse(deletedIdsStored) : [];
           if (!Array.isArray(deletedIds)) deletedIds = [];
-          if (!deletedIds.includes(clientId)) {
-            deletedIds.push(clientId);
-            localStorage.setItem('fica_deleted_client_ids', JSON.stringify(deletedIds));
+
+          const itemsToBlock = [clientId, clientCode, clientName].filter(Boolean) as string[];
+          for (const item of itemsToBlock) {
+            if (!deletedIds.includes(item)) {
+              deletedIds.push(item);
+            }
           }
+          localStorage.setItem('fica_deleted_client_ids', JSON.stringify(deletedIds));
 
           // Purge from fica_clients
           const storedClients = localStorage.getItem('fica_clients');
           if (storedClients) {
             let list: ClientFolder[] = JSON.parse(storedClients);
             if (Array.isArray(list)) {
-              list = list.filter((c) => c.id !== clientId);
+              list = list.filter((c) => !isTargetClient(c));
               localStorage.setItem('fica_clients', JSON.stringify(list));
             }
           }
@@ -1131,7 +1160,7 @@ export const sharepointService = {
           if (createdClients) {
             let list: ClientFolder[] = JSON.parse(createdClients);
             if (Array.isArray(list)) {
-              list = list.filter((c) => c.id !== clientId);
+              list = list.filter((c) => !isTargetClient(c));
               localStorage.setItem('fica_created_clients', JSON.stringify(list));
             }
           }
@@ -1143,6 +1172,7 @@ export const sharepointService = {
               const parsed = JSON.parse(stMap);
               if (parsed && typeof parsed === 'object') {
                 delete parsed[clientId];
+                if (clientCode) delete parsed[clientCode];
                 localStorage.setItem('fica_client_service_types', JSON.stringify(parsed));
               }
             } catch {
@@ -1165,20 +1195,23 @@ export const sharepointService = {
       }
 
       // 2. Cascade Delete in Supabase Real DB (Child records first to prevent foreign key errors)
-      if (isValidUUID(clientId)) {
-        try {
-          await supabase.from('documents').delete().eq('client_id', clientId);
-          await supabase.from('files').delete().eq('client_id', clientId);
-          await supabase.from('folders').delete().eq('client_id', clientId);
-          await supabase.from('user_client_assignments').delete().eq('client_id', clientId);
+      try {
+        await supabase.from('documents').delete().eq('client_id', clientId);
+        await supabase.from('files').delete().eq('client_id', clientId);
+        await supabase.from('folders').delete().eq('client_id', clientId);
+        await supabase.from('user_client_assignments').delete().eq('client_id', clientId);
 
-          const { error } = await supabase.from('clients').delete().eq('id', clientId);
-          if (error) {
-            console.warn('Supabase DB delete client notice:', error.message);
-          }
-        } catch (err: any) {
-          console.warn('Supabase DB delete cascade exception:', err?.message);
+        // Delete client root folder from Supabase DB by ID, Code, and Folder Name
+        await supabase.from('clients').delete().eq('id', clientId);
+        if (clientCode) {
+          await supabase.from('clients').delete().eq('code', clientCode);
         }
+        if (clientName) {
+          await supabase.from('clients').delete().ilike('folder_name', `%${clientName}%`);
+          await supabase.from('clients').delete().ilike('name', `%${clientName}%`);
+        }
+      } catch (err: any) {
+        console.warn('Supabase DB delete cascade exception:', err?.message);
       }
 
       await this.logAudit({
