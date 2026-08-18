@@ -210,12 +210,28 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               for (let j = 0; j < textNodes.length; j++) {
                 pText += textNodes[j].textContent || '';
               }
-              if (pText.trim().length > 0) {
+              const cleanP = pText.trim();
+              if (cleanP.length > 0) {
+                // Check alignment from w:jc tag
+                const jcElem = p.getElementsByTagName('w:jc')[0];
+                const alignVal = jcElem ? jcElem.getAttribute('w:val') : '';
+                const alignStyle = alignVal === 'center'
+                  ? 'text-align: center;'
+                  : alignVal === 'right'
+                  ? 'text-align: right;'
+                  : alignVal === 'both'
+                  ? 'text-align: justify;'
+                  : 'text-align: left;';
+
                 const isBold = p.getElementsByTagName('w:b').length > 0;
-                if (isBold && pText.length < 120) {
-                  html += `<h3 class="font-bold text-base my-2.5 text-slate-900 font-sans">${pText}</h3>`;
+
+                // Special formatting for National Motto & Headers
+                if (cleanP.includes('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM') || cleanP.includes('Độc lập - Tự do - Hạnh phúc') || cleanP.includes('o0o') || cleanP.includes('---')) {
+                  html += `<div style="text-align: center; font-weight: bold; font-size: 15px; margin: 4px 0; font-family: serif; text-transform: uppercase; color: #0f172a;">${cleanP}</div>`;
+                } else if (cleanP.startsWith('HỢP ĐỒNG') || cleanP.startsWith('CĂN CỨ') || (isBold && cleanP.length < 120)) {
+                  html += `<h3 style="${alignStyle || 'text-align: center;'} font-weight: bold; font-size: 16px; margin: 12px 0 6px 0; font-family: serif; color: #0284c7;">${cleanP}</h3>`;
                 } else {
-                  html += `<p class="my-1.5 leading-relaxed text-slate-800">${pText}</p>`;
+                  html += `<p style="${alignStyle} margin: 8px 0; line-height: 1.6; font-size: 14px; font-family: serif; color: #1e293b;">${cleanP}</p>`;
                 }
               }
             }
@@ -224,14 +240,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             const tables = xmlDoc.getElementsByTagName('w:tbl');
             for (let t = 0; t < tables.length; t++) {
               const tbl = tables[t];
-              html += '<table class="w-full border-collapse border border-slate-300 my-4 text-xs font-sans">';
+              html += '<table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; margin: 16px 0; font-size: 13px; font-family: sans-serif;">';
               const rows = tbl.getElementsByTagName('w:tr');
               for (let r = 0; r < rows.length; r++) {
                 html += '<tr>';
                 const cells = rows[r].getElementsByTagName('w:tc');
                 for (let c = 0; c < cells.length; c++) {
                   const cellText = cells[c].textContent || '';
-                  html += `<td class="border border-slate-300 p-2">${cellText}</td>`;
+                  html += `<td style="border: 1px solid #cbd5e1; padding: 8px; vertical-align: top;">${cellText}</td>`;
                 }
                 html += '</tr>';
               }
@@ -555,19 +571,41 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               <audio controls src={fileUrl} className="w-full rounded-lg" />
             </div>
           ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'office' && officeViewerUrl ? (
-            /* Official Microsoft Office Web Viewer (0 Download Required, 100% Perfect Word/Excel Formatting) */
-            <iframe
-              src={officeViewerUrl}
-              className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
-              title={file.name}
-            />
+            /* Official Microsoft Office Web Viewer (0 Download Required) */
+            <div className="w-full h-full flex flex-col space-y-1">
+              <div className="bg-slate-900 text-slate-300 text-[11px] px-3 py-1.5 rounded-lg border border-slate-800 flex items-center justify-between shrink-0">
+                <span className="truncate">💡 Nếu Microsoft báo "Không tìm thấy tệp", hãy bấm nút <b>[ 📄 Xem Nhanh ]</b> để xem ngay 100% đầy đủ định dạng tại chỗ!</span>
+                <button
+                  onClick={() => setViewEngine('native')}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded-md text-[10px] ml-2 shrink-0 transition-colors shadow-xs"
+                >
+                  Chuyển sang Xem Nhanh →
+                </button>
+              </div>
+              <iframe
+                src={officeViewerUrl}
+                className="w-full flex-1 rounded-xl border border-slate-800 bg-white shadow-2xl"
+                title={file.name}
+              />
+            </div>
           ) : (isDoc || isSpreadsheet) && fileUrl && viewEngine === 'google' && googleViewerUrl ? (
             /* Official Google Docs Web Viewer (0 Download Required) */
-            <iframe
-              src={googleViewerUrl}
-              className="w-full h-full rounded-xl border border-slate-800 bg-white shadow-2xl"
-              title={file.name}
-            />
+            <div className="w-full h-full flex flex-col space-y-1">
+              <div className="bg-slate-900 text-slate-300 text-[11px] px-3 py-1.5 rounded-lg border border-slate-800 flex items-center justify-between shrink-0">
+                <span className="truncate">💡 Nếu Google báo "Không có bản xem trước", hãy bấm nút <b>[ 📄 Xem Nhanh ]</b> để xem ngay 100% đầy đủ định dạng tại chỗ!</span>
+                <button
+                  onClick={() => setViewEngine('native')}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-2.5 py-1 rounded-md text-[10px] ml-2 shrink-0 transition-colors shadow-xs"
+                >
+                  Chuyển sang Xem Nhanh →
+                </button>
+              </div>
+              <iframe
+                src={googleViewerUrl}
+                className="w-full flex-1 rounded-xl border border-slate-800 bg-white shadow-2xl"
+                title={file.name}
+              />
+            </div>
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
             <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex justify-center">
