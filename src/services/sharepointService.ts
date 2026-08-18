@@ -749,25 +749,34 @@ export const sharepointService = {
       }
     }
 
-    // Filter out permanently deleted clients by ID, Code ('0901242639'), and Name ('SHK Holding')
+    // Filter out permanently deleted clients by ID or exact Code (e.g., '0901242639' / 'SHK Holding')
     if (typeof window !== 'undefined') {
       try {
         const deletedIdsStored = localStorage.getItem('fica_deleted_client_ids');
         if (deletedIdsStored) {
           const deletedIds: string[] = JSON.parse(deletedIdsStored);
           if (Array.isArray(deletedIds) && deletedIds.length > 0) {
-            const lowerDeleted = deletedIds.map((d) => d.toLowerCase());
-            for (const [key, c] of Array.from(map.entries())) {
-              const matchesDeleted =
-                (c.id && lowerDeleted.includes(c.id.toLowerCase())) ||
-                (c.code && lowerDeleted.includes(c.code.toLowerCase())) ||
-                lowerDeleted.some(
-                  (d) =>
-                    (c.folder_name && c.folder_name.toLowerCase().includes(d)) ||
-                    (c.name && c.name.toLowerCase().includes(d))
-                );
+            const lowerDeleted = deletedIds
+              .filter((d) => typeof d === 'string' && d.trim().length >= 3)
+              .map((d) => d.trim().toLowerCase());
 
-              if (matchesDeleted) {
+            for (const [key, c] of Array.from(map.entries())) {
+              const cId = (c.id || '').toLowerCase();
+              const cCode = (c.code || '').toLowerCase();
+              const cFolder = (c.folder_name || '').toLowerCase();
+              const cName = (c.name || '').toLowerCase();
+
+              const isDeleted = lowerDeleted.some((d) => {
+                if (!d) return false;
+                // Exact match on ID or Code
+                if (cId && cId === d) return true;
+                if (cCode && cCode === d) return true;
+                // Specific name match ONLY for d >= 5 chars
+                if (d.length >= 5 && ((cFolder && cFolder.includes(d)) || (cName && cName.includes(d)))) return true;
+                return false;
+              });
+
+              if (isDeleted) {
                 map.delete(key);
               }
             }
@@ -988,6 +997,31 @@ export const sharepointService = {
       total_files_count: 4,
       total_size_mb: 0,
     };
+
+    // Unblock newly created client code and ID from fica_deleted_client_ids if previously blocked
+    if (typeof window !== 'undefined') {
+      try {
+        const deletedIdsStored = localStorage.getItem('fica_deleted_client_ids');
+        if (deletedIdsStored) {
+          let deletedIds: string[] = JSON.parse(deletedIdsStored);
+          if (Array.isArray(deletedIds)) {
+            deletedIds = deletedIds.filter((d) => {
+              if (typeof d !== 'string') return false;
+              const lowerD = d.trim().toLowerCase();
+              return (
+                lowerD !== newId.toLowerCase() &&
+                lowerD !== cleanCode.toLowerCase() &&
+                lowerD !== name.trim().toLowerCase() &&
+                lowerD !== folder_name.toLowerCase()
+              );
+            });
+            localStorage.setItem('fica_deleted_client_ids', JSON.stringify(deletedIds));
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
 
     // Save to local cache & service type map immediately so UI shows client 100% of the time
     saveClientServiceType(newId, cleanCode, folder_name, serviceType);
