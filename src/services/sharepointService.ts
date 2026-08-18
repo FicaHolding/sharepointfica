@@ -1158,7 +1158,7 @@ export const sharepointService = {
         cloudDocs = data.map((d: any) => ({
           id: d.id,
           client_id: d.client_id || clientId || '',
-          folder_id: d.folder_id || folderId || '',
+          folder_id: d.folder_id || '',
           name: d.name,
           current_version: d.current_version || 1,
           file_size: Number(d.size || d.file_size || 0),
@@ -1216,7 +1216,7 @@ export const sharepointService = {
 
       let allFilesList = Array.from(map.values());
       if (clientId) {
-        allFilesList = allFilesList.filter((f) => f.client_id === clientId || (folderId && f.folder_id === folderId));
+        allFilesList = allFilesList.filter((f) => !f.client_id || f.client_id === clientId);
       }
       return allFilesList;
     } catch {

@@ -1083,23 +1083,36 @@ function SharePointContent() {
 
     if (selectedSubFolder) {
       list = list.filter((f) => {
-        if (!f.folder_id) return true;
+        // 1. Direct ID match
         if (f.folder_id === selectedSubFolder.id) return true;
-        if (f.folder_id === selectedSubFolder.name) return true;
-        if (f.folder_id.substring(0, 8) === selectedSubFolder.id.substring(0, 8)) return true;
 
-        // Subfolder index & name matching (e.g. '01', '02', '03', '04')
+        // 2. Direct Name match
+        if (f.folder_id === selectedSubFolder.name) return true;
+
+        // 3. Match deterministic subfolder ID prefix (e.g. sf111111 vs sf222222)
+        if (f.folder_id && f.folder_id.startsWith('sf') && selectedSubFolder.id.startsWith('sf')) {
+          const fSub = f.folder_id.substring(0, 8);
+          const sSub = selectedSubFolder.id.substring(0, 8);
+          if (fSub === sSub) return true;
+        }
+
+        // 4. Subfolder prefix matching ('01', '02', '03', '04')
         const subFolderPrefix = selectedSubFolder.name.substring(0, 2);
         if (/^\d{2}$/.test(subFolderPrefix)) {
           if (
-            f.folder_id.includes(subFolderPrefix) ||
-            f.folder_id.startsWith(`sf${subFolderPrefix.repeat(3)}`) ||
-            f.name.startsWith(subFolderPrefix)
+            f.folder_id &&
+            (f.folder_id.startsWith(`sf${subFolderPrefix.repeat(3)}`) || f.folder_id.includes(`_${subFolderPrefix}`))
           ) {
             return true;
           }
         }
-        return true;
+
+        // 5. If file has no folder_id at all, default it to '01_Pháp lý & Hợp đồng'
+        if (!f.folder_id) {
+          return subFolderPrefix === '01';
+        }
+
+        return false;
       });
     }
 
