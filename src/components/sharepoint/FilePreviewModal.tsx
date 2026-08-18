@@ -459,9 +459,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         </div>
 
         {/* Content Viewer Area */}
-        <div className="flex-1 bg-slate-950 p-2 sm:p-4 overflow-auto flex items-center justify-center relative">
+        <div className={`flex-1 overflow-auto p-2 sm:p-6 flex justify-center relative ${isDoc || isSpreadsheet ? 'bg-slate-200/90 text-slate-900' : 'bg-slate-950 text-slate-100'}`}>
           {loading || renderingDoc ? (
-            <div className="flex flex-col items-center space-y-3 text-slate-400 text-xs">
+            <div className="flex flex-col items-center space-y-3 text-slate-400 text-xs my-auto">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               <span>{renderingDoc ? 'Đang trích xuất nội dung văn bản...' : 'Đang nạp dữ liệu file...'}</span>
             </div>
@@ -513,17 +513,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 transform: `scale(${zoomLevel / 100}) rotate(${rotation}deg)`,
                 transition: 'transform 0.2s ease-in-out',
               }}
-              className="max-w-full max-h-full flex items-center justify-center"
+              className="max-w-full max-h-full flex items-center justify-center my-auto"
             >
               <img
                 src={fileUrl}
                 alt={file.name}
-                className="max-h-[75vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
+                className="max-h-[78vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
               />
             </div>
           ) : isVideo && fileUrl ? (
             /* Native Video Player (.mp4, .webm, .mov) */
-            <div className="w-full h-full flex items-center justify-center p-2">
+            <div className="w-full h-full flex items-center justify-center p-2 my-auto">
               <video
                 controls
                 autoPlay
@@ -547,14 +547,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : isDoc ? (
             /* Native DOCX Rendered A4 Paper Sheet Canvas */
-            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
+            <div className="w-full flex justify-center py-4">
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-sm p-6 sm:p-12 min-h-[85vh] border border-slate-300 font-serif leading-relaxed text-sm select-text my-auto"
+                className="w-full max-w-4xl bg-white text-slate-900 shadow-2xl rounded-md p-6 sm:p-14 border border-slate-300 font-serif leading-relaxed text-sm select-text"
               >
                 {/* Header Banner */}
                 <div className="border-b border-slate-200 pb-3 mb-6 flex items-center justify-between font-sans text-xs text-slate-500">
@@ -585,14 +585,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : isSpreadsheet && excelHtml ? (
             /* Native Excel Sheet Table View (.xlsx, .xls, .csv) */
-            <div className="w-full h-full overflow-auto bg-slate-950 p-2 sm:p-6 flex flex-col items-center">
+            <div className="w-full flex justify-center py-4">
               <div
                 style={{
                   transform: `scale(${zoomLevel / 100})`,
                   transformOrigin: 'top center',
                   transition: 'transform 0.2s ease-in-out',
                 }}
-                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text my-auto"
+                className="w-full max-w-6xl bg-white text-slate-900 shadow-2xl rounded-lg p-4 overflow-auto border border-slate-300 font-sans text-xs select-text"
               >
                 <div className="border-b border-slate-200 pb-2 mb-3 flex items-center justify-between font-sans text-xs text-slate-500">
                   <span className="font-bold text-slate-700 flex items-center space-x-1.5">
