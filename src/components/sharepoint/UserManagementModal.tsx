@@ -684,22 +684,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                     await sharepointService.activateUserDirectly(u.id);
                                     refreshUsers();
                                   }}
-                                  className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1 rounded text-[11px] transition-colors shadow-xs cursor-pointer"
-                                  title="Phê duyệt và kích hoạt tài khoản thành viên ngay lập tức"
+                                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm cursor-pointer shrink-0"
+                                  title="Phê duyệt và kích hoạt tài khoản thành viên ngay lập tức (Không cần qua email)"
                                 >
-                                  <UserCheck className="w-3.5 h-3.5" />
+                                  <UserCheck className="w-4 h-4" />
                                   <span>Phê Duyệt</span>
-                                </button>
-                              )}
-
-                              {/* Resend Invite */}
-                              {u.status === 'pending' && (
-                                <button
-                                  onClick={() => handleResendInvite(u.email)}
-                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
-                                  title="Gửi lại email kích hoạt"
-                                >
-                                  <Mail className="w-4 h-4" />
                                 </button>
                               )}
 
