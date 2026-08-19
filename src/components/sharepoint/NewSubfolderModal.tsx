@@ -8,6 +8,7 @@ interface NewSubfolderModalProps {
   onClose: () => void;
   onCreateSubfolder: (name: string) => Promise<{ success: boolean; error?: string }>;
   clientName?: string;
+  parentFolderName?: string;
 }
 
 export const NewSubfolderModal: React.FC<NewSubfolderModalProps> = ({
@@ -15,6 +16,7 @@ export const NewSubfolderModal: React.FC<NewSubfolderModalProps> = ({
   onClose,
   onCreateSubfolder,
   clientName,
+  parentFolderName,
 }) => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -53,9 +55,15 @@ export const NewSubfolderModal: React.FC<NewSubfolderModalProps> = ({
               <FolderPlus className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm">Tạo Thư Mục Mới</h3>
-              <p className="text-[11px] text-slate-400 truncate max-w-[240px]">
-                {clientName ? `Khách hàng: ${clientName}` : 'Trong thư mục hiện tại'}
+              <h3 className="font-bold text-sm">
+                {parentFolderName ? `Tạo Thư Mục Con Trong "${parentFolderName}"` : 'Tạo Thư Mục Mới'}
+              </h3>
+              <p className="text-[11px] text-slate-400 truncate max-w-[280px]">
+                {parentFolderName
+                  ? `Thư mục cha: ${parentFolderName}`
+                  : clientName
+                  ? `Khách hàng: ${clientName}`
+                  : 'Trong thư mục hiện tại'}
               </p>
             </div>
           </div>

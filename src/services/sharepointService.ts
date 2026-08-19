@@ -844,12 +844,17 @@ export const sharepointService = {
     return Array.from(map.values());
   },
 
-  // Create new Custom SubFolder in Client Folder
-  async createSubFolder(clientId: string, name: string): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+  // Create new Custom SubFolder in Client Folder (Support Nested Subfolders via parent_id)
+  async createSubFolder(
+    clientId: string,
+    name: string,
+    parentId?: string | null
+  ): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
     const newId = crypto.randomUUID();
     const folderObj: FolderItem = {
       id: newId,
       client_id: clientId,
+      parent_id: parentId || null,
       name: name.trim(),
       is_system_folder: false,
       created_by: 'Admin',
@@ -875,6 +880,7 @@ export const sharepointService = {
           {
             id: newId,
             client_id: clientId,
+            parent_id: parentId || null,
             name: name.trim(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

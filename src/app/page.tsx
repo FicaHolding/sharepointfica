@@ -687,15 +687,28 @@ function SharePointContent() {
       return { success: false, error: 'Chưa chọn Khách hàng' };
     }
 
-    const res = await sharepointService.createSubFolder(selectedClient.id, name);
+    const parentId = selectedSubFolder ? selectedSubFolder.id : null;
+    const res = await sharepointService.createSubFolder(selectedClient.id, name, parentId);
     if (res.success && res.folder) {
       setCustomSubFolders((prev) => [...prev, res.folder!]);
-      addToast('success', 'Đã tạo thư mục mới thành công!', res.folder.name);
+      addToast(
+        'success',
+        selectedSubFolder ? `Đã tạo thư mục con trong [${selectedSubFolder.name}]!` : 'Đã tạo thư mục mới thành công!',
+        res.folder.name
+      );
       pushAuditLog('UPDATE_METADATA', `Tạo thư mục mới [${res.folder.name}] cho khách hàng ${selectedClient.folder_name}`, undefined, selectedClient.folder_name);
       router.refresh();
       return { success: true };
     }
     return { success: false, error: res.error || 'Lỗi tạo thư mục' };
+  };
+
+  const handleCreateNestedSubFolder = (subFolder: FolderItem) => {
+    setSelectedSubFolder(subFolder);
+    if (selectedClient) {
+      updateUrlState(selectedClient.id, subFolder.id, activeTab);
+    }
+    setIsNewSubfolderModalOpen(true);
   };
 
   const handleRenameSubfolder = async (folderId: string, newName: string) => {
@@ -1054,18 +1067,30 @@ function SharePointContent() {
     };
 
     const map = new Map<string, FolderItem>();
-    for (const d of defaults) {
-      map.set(getFolderKey(d), d);
-    }
 
-    for (const c of customSubFolders) {
-      if (c.client_id === selectedClient.id || !c.client_id) {
-        map.set(getFolderKey(c), c);
+    if (!selectedSubFolder) {
+      for (const d of defaults) {
+        map.set(getFolderKey(d), d);
+      }
+
+      for (const c of customSubFolders) {
+        if ((c.client_id === selectedClient.id || !c.client_id) && !c.parent_id) {
+          map.set(getFolderKey(c), c);
+        }
+      }
+    } else {
+      for (const c of customSubFolders) {
+        if (
+          (c.client_id === selectedClient.id || !c.client_id) &&
+          (c.parent_id === selectedSubFolder.id || c.parent_id === selectedSubFolder.name)
+        ) {
+          map.set(getFolderKey(c), c);
+        }
       }
     }
 
     return Array.from(map.values());
-  }, [selectedClient, customSubFolders]);
+  }, [selectedClient, selectedSubFolder, customSubFolders]);
 
   const activeClientsList = useMemo(() => clients.filter((c) => c.status === 'active'), [clients]);
   const archivedClientsList = useMemo(() => clients.filter((c) => c.status === 'archived'), [clients]);
@@ -1451,6 +1476,7 @@ function SharePointContent() {
                 onDeleteClientModal={(c) => setSelectedClientForDelete(c)}
                 onRenameSubFolderModal={(sf) => setSelectedSubfolderForRename(sf)}
                 onDeleteSubFolderModal={(sf) => setSelectedSubfolderForDelete(sf)}
+                onCreateNestedSubFolder={handleCreateNestedSubFolder}
                 isReadOnly={isReadOnly}
               />
             ) : (
@@ -1641,6 +1667,7 @@ function SharePointContent() {
         onClose={() => setIsNewSubfolderModalOpen(false)}
         onCreateSubfolder={handleCreateSubfolder}
         clientName={selectedClient?.folder_name}
+        parentFolderName={selectedSubFolder?.name}
       />
 
       <RenameSubfolderModal

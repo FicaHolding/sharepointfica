@@ -19,6 +19,7 @@ import {
   Clock,
   AlertCircle,
   FolderOpen,
+  FolderPlus,
   Eye,
   Info,
   Edit3,
@@ -52,6 +53,7 @@ interface DocumentListViewProps {
   onDeleteClientModal: (client: ClientFolder) => void;
   onRenameSubFolderModal?: (subFolder: FolderItem) => void;
   onDeleteSubFolderModal?: (subFolder: FolderItem) => void;
+  onCreateNestedSubFolder?: (subFolder: FolderItem) => void;
   isReadOnly: boolean;
 }
 
@@ -80,6 +82,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
   onDeleteClientModal,
   onRenameSubFolderModal,
   onDeleteSubFolderModal,
+  onCreateNestedSubFolder,
   isReadOnly,
 }) => {
   const [activeMenuId, setActiveMenuId] = React.useState<string | null>(null);
@@ -568,6 +571,16 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                           >
                             <FolderOpen className="w-4 h-4 text-blue-600" />
                             <span>Mở thư mục</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              onCreateNestedSubFolder?.(subFolder);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full px-3.5 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center space-x-2.5 font-semibold"
+                          >
+                            <FolderPlus className="w-4 h-4 text-emerald-600" />
+                            <span>+ Tạo thư mục con</span>
                           </button>
                           <button
                             onClick={() => {
