@@ -245,7 +245,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
           })}
 
         {/* Render Mobile SubFolder Cards */}
-        {isSubFolderView &&
+        {currentClient && subFolders.length > 0 &&
           subFolders.map((subFolder) => (
             <div
               key={subFolder.id}
@@ -258,7 +258,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h4 className="font-bold text-slate-900 text-sm truncate">{subFolder.name}</h4>
-                  <p className="text-[11px] text-slate-500">Thư mục hệ thống Fica</p>
+                  <p className="text-[11px] text-slate-500">Thư mục con Fica</p>
                 </div>
               </div>
               <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-md border border-blue-200">
@@ -507,7 +507,7 @@ export const DocumentListView: React.FC<DocumentListViewProps> = ({
             })}
 
           {/* LEVEL 2: Render SubFolders */}
-          {isSubFolderView &&
+          {currentClient && subFolders.length > 0 &&
             subFolders.map((subFolder, idx) => {
               const isNearBottom = idx >= 1 || subFolders.length <= 3;
               return (

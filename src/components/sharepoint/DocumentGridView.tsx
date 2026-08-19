@@ -179,8 +179,8 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
           );
         })}
 
-      {/* Standard 4 Subfolders in Grid */}
-      {isSubFolderView &&
+      {/* Subfolders in Grid */}
+      {currentClient && subFolders.length > 0 &&
         subFolders.map((sf) => (
           <div
             key={sf.id}

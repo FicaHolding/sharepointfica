@@ -1057,18 +1057,19 @@ function SharePointContent() {
     if (!selectedClient) return [];
     const defaults = createSubfoldersForClient(selectedClient.id);
 
-    const getFolderKey = (folder: FolderItem): string => {
-      const cleanName = folder.name.trim();
-      const prefix = cleanName.substring(0, 2);
-      if (/^\d{2}$/.test(prefix)) {
-        return `prefix_${prefix}`;
-      }
-      return `id_${folder.id}`;
-    };
-
     const map = new Map<string, FolderItem>();
 
     if (!selectedSubFolder) {
+      // 1. Client Root Level: Show default top 4 categories + root custom subfolders
+      const getFolderKey = (folder: FolderItem): string => {
+        const cleanName = folder.name.trim();
+        const prefix = cleanName.substring(0, 2);
+        if (/^\d{2}$/.test(prefix)) {
+          return `prefix_${prefix}`;
+        }
+        return `id_${folder.id}`;
+      };
+
       for (const d of defaults) {
         map.set(getFolderKey(d), d);
       }
@@ -1079,12 +1080,23 @@ function SharePointContent() {
         }
       }
     } else {
+      // 2. Inside Parent Subfolder: Show nested subfolders created with parent_id matching selectedSubFolder
+      const currentParentId = selectedSubFolder.id;
+      const currentParentName = selectedSubFolder.name.trim().toLowerCase();
+
       for (const c of customSubFolders) {
+        const pId = c.parent_id ? String(c.parent_id).trim() : '';
         if (
-          (c.client_id === selectedClient.id || !c.client_id) &&
-          (c.parent_id === selectedSubFolder.id || c.parent_id === selectedSubFolder.name)
+          (c.client_id === selectedClient.id || !c.client_id) && pId &&
+          (
+            pId === currentParentId ||
+            pId.toLowerCase() === currentParentName ||
+            (currentParentId.length >= 8 && pId.startsWith(currentParentId.substring(0, 8))) ||
+            (pId.length >= 8 && currentParentId.startsWith(pId.substring(0, 8)))
+          )
         ) {
-          map.set(getFolderKey(c), c);
+          // Always key by folder ID inside subfolders so subfolders are never deduplicated by prefix!
+          map.set(c.id, c);
         }
       }
     }
