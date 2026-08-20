@@ -2025,7 +2025,8 @@ export const sharepointService = {
             }
 
             if (blob && blob.size > 0 && !blob.type.includes('json')) {
-              fileFolder.file(file.name, blob);
+              const activeFolder = fileFolder || rootZipFolder;
+              activeFolder.file(file.name, blob);
             }
           } catch (fileErr) {
             console.warn(`File zip add notice [${file.name}]:`, fileErr);
