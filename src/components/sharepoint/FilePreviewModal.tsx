@@ -72,6 +72,18 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   }, []);
 
   useEffect(() => {
+    if (!isOpen) {
+      setFileUrl(null);
+      setHttpCloudUrl(null);
+      setExcelHtml(null);
+      setFallbackHtml(null);
+      setIframeLoaded(false);
+      setZoomLevel(100);
+      setRotation(0);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     async function loadPreviewUrl() {
       if (!file || !isOpen) return;
 
@@ -126,15 +138,11 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             setFileUrl(targetUrl);
             if (!httpCloudUrl) setHttpCloudUrl(targetUrl);
 
-            // Default engine selection: Office Online for Office docs if HTTP URL available
-            const isOfficeDoc = Boolean(file.name.match(/\.(docx|doc|xlsx|xls|pptx|ppt)$/i));
-            if (isOfficeDoc && targetUrl.startsWith('http')) {
-              setActiveEngine('office');
-            } else {
-              setActiveEngine('native');
-            }
+            // Default engine selection: Use 'native' local viewer for Excel & Word to prevent MS Office iframe auto-downloads!
+            setActiveEngine('native');
           } else {
             setFileUrl(targetUrl);
+            setActiveEngine('native');
           }
         } else {
           setHasStorageError(true);
