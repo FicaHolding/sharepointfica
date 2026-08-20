@@ -39,7 +39,7 @@ import {
   UserRole,
   ServiceType,
 } from '@/types/sharepoint';
-import { Lock, Activity, Info, UploadCloud, Users, Settings, Filter, CheckCircle2 } from 'lucide-react';
+import { Lock, Activity, Info, UploadCloud, Users, Settings, Filter, CheckCircle2, Download } from 'lucide-react';
 import { sharepointService } from '@/services/sharepointService';
 import { createClient } from '@/utils/supabase/client';
 import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
@@ -777,6 +777,22 @@ function SharePointContent() {
     }
   };
 
+  // Download Entire Client Folder (Archived or Active) as ZIP Archive
+  const handleDownloadClientZip = async (client: ClientFolder) => {
+    addToast('info', 'Đang tạo file ZIP...', `Đang chuẩn bị quét tài liệu thuộc thư mục [${client.folder_name}]`);
+    pushAuditLog('DOWNLOAD_FILE', `Tải xuống nén ZIP toàn bộ thư mục ${client.folder_name}`, undefined, client.folder_name);
+
+    const success = await sharepointService.downloadClientFolderZip(client, (msg) => {
+      addToast('info', 'Đang nén file ZIP...', msg);
+    });
+
+    if (success) {
+      addToast('success', 'Đã tải xuống toàn bộ thư mục khách hàng (ZIP)!', client.folder_name);
+    } else {
+      addToast('error', 'Không thể tạo file ZIP', 'Vui lòng kiểm tra lại đường truyền và thử lại.');
+    }
+  };
+
   // Archive / Restore Client
   const handleArchiveClient = async (client: ClientFolder) => {
     await sharepointService.updateClientStatus(client.id, 'archived', currentUser.full_name);
@@ -1325,19 +1341,30 @@ function SharePointContent() {
 
             {/* Read-Only Banner for Archived Clients */}
             {isReadOnly && (
-              <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 text-xs text-amber-900 flex items-center justify-between animate-fade-in shadow-inner">
+              <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 text-xs text-amber-900 flex items-center justify-between animate-fade-in shadow-inner flex-wrap gap-2">
                 <div className="flex items-center space-x-2 font-medium">
                   <Lock className="w-4 h-4 text-amber-700 shrink-0" />
                   <span>
                     Hồ sơ khách hàng <strong>{selectedClient?.folder_name}</strong> đã ở trạng thái <strong>ARCHIVE</strong> (Chế độ Read-Only). Toàn bộ quyền chỉnh sửa và tải lên file bị khóa.
                   </span>
                 </div>
-                <button
-                  onClick={() => selectedClient && handleRestoreClient(selectedClient)}
-                  className="bg-amber-200 hover:bg-amber-300 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded border border-amber-400 transition-colors shrink-0 ml-2"
-                >
-                  Khôi phục Active
-                </button>
+                <div className="flex items-center space-x-2 shrink-0">
+                  {selectedClient && (
+                    <button
+                      onClick={() => handleDownloadClientZip(selectedClient)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1 rounded-lg transition-colors flex items-center space-x-1 shadow-xs cursor-pointer min-h-[36px]"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải ZIP toàn bộ thư mục</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => selectedClient && handleRestoreClient(selectedClient)}
+                    className="bg-amber-200 hover:bg-amber-300 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded border border-amber-400 transition-colors shrink-0 cursor-pointer min-h-[36px]"
+                  >
+                    Khôi phục Active
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1489,6 +1516,7 @@ function SharePointContent() {
                 onRenameSubFolderModal={(sf) => setSelectedSubfolderForRename(sf)}
                 onDeleteSubFolderModal={(sf) => setSelectedSubfolderForDelete(sf)}
                 onCreateNestedSubFolder={handleCreateNestedSubFolder}
+                onDownloadClientZip={handleDownloadClientZip}
                 isReadOnly={isReadOnly}
               />
             ) : (
@@ -1538,6 +1566,7 @@ function SharePointContent() {
                 onOpenContextMenu={(pos) => setContextMenuPos(pos)}
                 onRenameClientModal={(c) => setSelectedClientForRename(c)}
                 onDeleteClientModal={(c) => setSelectedClientForDelete(c)}
+                onDownloadClientZip={handleDownloadClientZip}
                 isReadOnly={isReadOnly}
               />
             )}
@@ -1598,6 +1627,7 @@ function SharePointContent() {
         onOpenVersionHistory={(f) => setSelectedFileForVersionHistory(f)}
         onDownloadFile={(f) => addToast('info', 'Đang tải file...', f.name)}
         onDeleteFile={handleDeleteFile}
+        onDownloadClientZip={handleDownloadClientZip}
         userRole={currentUser.role}
         isReadOnly={isReadOnly}
       />

@@ -37,6 +37,7 @@ interface ContextMenuProps {
   onOpenVersionHistory: (file: DocumentFile) => void;
   onDownloadFile: (file: DocumentFile) => void;
   onDeleteFile: (fileId: string) => void;
+  onDownloadClientZip?: (client: ClientFolder) => void;
   userRole: UserRole;
   isReadOnly: boolean;
 }
@@ -55,6 +56,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onOpenVersionHistory,
   onDownloadFile,
   onDeleteFile,
+  onDownloadClientZip,
   userRole,
   isReadOnly,
 }) => {
@@ -111,6 +113,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           >
             <FolderOpen className="w-3.5 h-3.5 text-blue-600" />
             <span>📁 Mở thư mục (Open)</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onDownloadClientZip?.(client);
+              onClose();
+            }}
+            className="w-full px-3 py-1.5 text-left flex items-center space-x-2 text-blue-700 hover:bg-blue-50 transition-colors font-semibold"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span>📦 Tải ZIP toàn bộ thư mục</span>
           </button>
 
           <button

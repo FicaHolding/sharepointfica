@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/client';
 import { ClientFolder, FolderItem, DocumentFile, FileVersion, AuditLog, AuditActionType, ServiceType, UserProfile, UserRole } from '@/types/sharepoint';
 import { SUPABASE_STORAGE_BUCKET } from '@/constants/supabase';
 import { realtimeManager } from '@/lib/realtimeManager';
+import JSZip from 'jszip';
 
 const supabase = createClient();
 
@@ -1943,6 +1944,111 @@ export const sharepointService = {
       return true;
     } catch (err: any) {
       console.error('Download blob exception:', err.message);
+      return false;
+    }
+  },
+
+  // Download Entire Client Folder (Archived or Active) as an organized ZIP archive
+  async downloadClientFolderZip(
+    client: ClientFolder,
+    onProgress?: (msg: string) => void
+  ): Promise<boolean> {
+    try {
+      if (onProgress) onProgress(`Đang quét file thuộc khách hàng ${client.folder_name}...`);
+
+      const allFiles = await this.fetchFiles(client.id);
+      const clientFiles = allFiles.filter((f) => {
+        if (f.client_id === client.id) return true;
+        if (f.storage_path && (f.storage_path.includes(client.id) || (client.code && f.storage_path.includes(client.code)))) return true;
+        return false;
+      });
+
+      const clientFolders = await this.fetchFolders(client.id);
+      const folderMap = new Map<string, string>();
+      for (const folder of clientFolders) {
+        folderMap.set(folder.id, folder.name);
+      }
+
+      const zip = new JSZip();
+      const zipFolderName = client.folder_name || `[${client.code}] - ${client.name}`;
+      const rootZipFolder = zip.folder(zipFolderName) || zip;
+
+      // Always create standard 4 category subfolders in zip structure
+      const sub01 = rootZipFolder.folder('01_Pháp lý & Hợp đồng');
+      const sub02 = rootZipFolder.folder('02_Chứng từ & Báo cáo Tài chính');
+      const sub03 = rootZipFolder.folder('03_Báo cáo quản trị');
+      const sub04 = rootZipFolder.folder('04_Báo cáo Nghiệm thu');
+
+      if (clientFiles.length > 0) {
+        let downloadedCount = 0;
+        for (const file of clientFiles) {
+          downloadedCount++;
+          if (onProgress) {
+            onProgress(`Đang nén file (${downloadedCount}/${clientFiles.length}): ${file.name}`);
+          }
+
+          let fileFolder: JSZip | null = rootZipFolder;
+          if (file.folder_id && folderMap.has(file.folder_id)) {
+            const fName = folderMap.get(file.folder_id)!;
+            fileFolder = rootZipFolder.folder(fName) || rootZipFolder;
+          } else {
+            if (file.name.includes('01_') || file.name.toLowerCase().includes('phap_ly') || file.name.toLowerCase().includes('hop_dong')) {
+              fileFolder = sub01;
+            } else if (file.name.includes('02_') || file.name.toLowerCase().includes('chung_tu') || file.name.toLowerCase().includes('bctc')) {
+              fileFolder = sub02;
+            } else if (file.name.includes('03_') || file.name.toLowerCase().includes('quan_tri')) {
+              fileFolder = sub03;
+            } else if (file.name.includes('04_') || file.name.toLowerCase().includes('nghiem_thu')) {
+              fileFolder = sub04;
+            } else {
+              fileFolder = sub01 || rootZipFolder;
+            }
+          }
+
+          try {
+            let blob: Blob | null = null;
+            if (file.storage_path) {
+              const cleanPath = file.storage_path.replace(/^\/+/, '');
+              blob = (await getBlobFromIndexedDB(cleanPath)) || (await getBlobFromIndexedDB(file.storage_path));
+              if (!blob) {
+                const { data } = await supabase.storage.from(SUPABASE_STORAGE_BUCKET).download(cleanPath);
+                blob = data;
+              }
+            }
+
+            if (!blob && file.storage_path) {
+              const res = await this.getFilePreviewOrDownloadUrl(file.storage_path);
+              if (res.url && res.url.startsWith('http')) {
+                const resp = await fetch(res.url);
+                if (resp.ok) blob = await resp.blob();
+              }
+            }
+
+            if (blob && blob.size > 0 && !blob.type.includes('json')) {
+              fileFolder.file(file.name, blob);
+            }
+          } catch (fileErr) {
+            console.warn(`File zip add notice [${file.name}]:`, fileErr);
+          }
+        }
+      }
+
+      if (onProgress) onProgress('Đang nén file ZIP toàn bộ thư mục...');
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const cleanFileName = client.code ? `[${client.code}]_${client.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Archived.zip` : `${client.name}_Archived.zip`;
+      link.download = cleanFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+
+      return true;
+    } catch (err: any) {
+      console.error('Lỗi downloadClientFolderZip:', err);
       return false;
     }
   },

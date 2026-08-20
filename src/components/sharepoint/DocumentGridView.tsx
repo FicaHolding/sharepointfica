@@ -40,6 +40,7 @@ interface DocumentGridViewProps {
   onOpenContextMenu: (pos: ContextMenuPosition) => void;
   onRenameClientModal: (client: ClientFolder) => void;
   onDeleteClientModal: (client: ClientFolder) => void;
+  onDownloadClientZip?: (client: ClientFolder) => void;
   isReadOnly: boolean;
 }
 
@@ -64,6 +65,7 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
   onOpenContextMenu,
   onRenameClientModal,
   onDeleteClientModal,
+  onDownloadClientZip,
   isReadOnly,
 }) => {
   const isFolderView = !currentClient;
@@ -150,6 +152,14 @@ export const DocumentGridView: React.FC<DocumentGridViewProps> = ({
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                 <span>{client.total_files_count || 4} thư mục con</span>
                 <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => onDownloadClientZip?.(client)}
+                    className="p-1.5 hover:bg-blue-50 rounded text-slate-600 hover:text-blue-600"
+                    title="Tải xuống ZIP toàn bộ thư mục"
+                  >
+                    <Download className="w-4 h-4 text-blue-600" />
+                  </button>
+
                   <button
                     onClick={() => onRenameClientModal(client)}
                     className="p-1.5 hover:bg-slate-100 rounded text-slate-600 hover:text-indigo-600"
