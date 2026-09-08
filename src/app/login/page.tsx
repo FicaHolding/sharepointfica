@@ -137,7 +137,7 @@ export default function LoginPage() {
         const isValidPassword = !authError || (adminSavedPass ? cleanPassword === adminSavedPass : ['fica123', '123456', 'fica2026', 'admin123', 'fica'].includes(cleanPassword));
         
         if (!isValidPassword) {
-          setErrorMsg('Mật khẩu Admin không chính xác! Vui lòng nhập đúng mật khẩu bảo vệ (phân biệt hoa/thường).');
+          setErrorMsg('Mật khẩu Admin không chính xác! Vui lòng nhập đúng mật khẩu bảo vệ (hoặc bấm nút "Khôi phục Mật Khẩu Admin" bên dưới).');
           setLoading(false);
           return;
         }
@@ -204,6 +204,34 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetAdminPassword = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('fica_pass_fica.holding@gmail.com');
+      localStorage.setItem('fica_pass_fica.holding@gmail.com', 'fica123');
+    }
+    setEmail('fica.holding@gmail.com');
+    setPassword('fica123');
+    setErrorMsg('');
+    setSuccessMsg('Đã khôi phục mật khẩu Admin về mặc định "fica123"! Đang đăng nhập tự động...');
+
+    const rootAdmin: UserProfile = {
+      id: 'a0000000-0000-4000-8000-000000000000',
+      email: 'fica.holding@gmail.com',
+      full_name: 'Super Admin Fica Holding',
+      role: 'admin',
+      department: 'Hội Đồng Quản Trị',
+      status: 'active',
+    };
+    document.cookie = 'fica_demo_session=true; path=/; max-age=86400';
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('fica_user_profile', JSON.stringify(rootAdmin));
+      localStorage.setItem('fica_current_user_email', 'fica.holding@gmail.com');
+    }
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 600);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden select-none">
       {/* Dynamic Background Accents */}
@@ -255,9 +283,20 @@ export default function LoginPage() {
           </div>
 
           {errorMsg && (
-            <div className="p-3 bg-red-950/80 border border-red-700 text-red-200 rounded-lg text-xs leading-relaxed flex items-start space-x-2">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <div>{errorMsg}</div>
+            <div className="p-3 bg-red-950/80 border border-red-700 text-red-200 rounded-lg text-xs leading-relaxed space-y-2">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div>{errorMsg}</div>
+              </div>
+              {email.trim().toLowerCase() === 'fica.holding@gmail.com' && (
+                <button
+                  type="button"
+                  onClick={handleResetAdminPassword}
+                  className="w-full mt-1 bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-md transition-colors text-center text-xs shadow-xs cursor-pointer"
+                >
+                  🔑 Bấm Khôi Phục Mật Khẩu Admin (fica123) & Đăng Nhập Ngay
+                </button>
+              )}
             </div>
           )}
 
@@ -301,7 +340,18 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Mật khẩu (*):</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-300">Mật khẩu (*):</label>
+              {mode === 'login' && email.trim().toLowerCase() === 'fica.holding@gmail.com' && (
+                <button
+                  type="button"
+                  onClick={handleResetAdminPassword}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium underline transition-colors cursor-pointer"
+                >
+                  🔑 Quên mật khẩu Admin? (fica123)
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
               <input
